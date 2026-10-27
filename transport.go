@@ -3,8 +3,10 @@ package zharp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -13,6 +15,10 @@ import (
 // its own is still sent alone rather than dropped.
 const maxRequestBytes = 1_000_000
 
+// rejectedBackoff is how long sending stops once Zharp refuses the API key (401/403): one body is
+// tried again after it, and while the key is still refused the wait starts over.
+const rejectedBackoff = time.Hour
+
 // transport sends batches of log entries to {endpoint}/agent/logs as {"logs": [...]}.
 type transport struct {
 	apiKey string
@@ -20,6 +26,13 @@ type transport struct {
 	client *http.Client
 	// retryDelay: the first retry waits twice this, the second four times.
 	retryDelay time.Duration
+
+	// A refused key (401/403) stops sending until retryAt, with one warning — not every batch
+	// sent to a dead key, forever. now is time.Now, replaceable in tests.
+	mu       sync.Mutex
+	rejected bool
+	retryAt  time.Time
+	now      func() time.Time
 }
 
 // send sends entries, split into bodies by size. It reports whether every body was taken or
@@ -27,6 +40,10 @@ type transport struct {
 func (t *transport) send(entries []map[string]any) bool {
 	delivered := true
 	for _, body := range splitBySize(entries, maxRequestBytes) {
+		// While the key is refused, entries are dropped: nothing queues up in memory.
+		if t.backedOff() {
+			return true
+		}
 		if !t.sendBody(body) {
 			delivered = false
 		}
@@ -38,7 +55,15 @@ func (t *transport) send(entries []map[string]any) bool {
 // won't be fixed by sending the same thing again.
 func (t *transport) sendBody(body []byte) bool {
 	for attempt := 0; attempt < 3; attempt++ {
-		if status, err := t.post(body); err == nil && status < 500 {
+		status, err := t.post(body)
+		if err == nil && (status == http.StatusUnauthorized || status == http.StatusForbidden) {
+			t.refused(status)
+			return true
+		}
+		if err == nil && status < 500 {
+			if status < 300 {
+				t.accepted()
+			}
 			return true
 		}
 		if attempt < 2 {
@@ -46,6 +71,42 @@ func (t *transport) sendBody(body []byte) bool {
 		}
 	}
 	return false
+}
+
+func (t *transport) clock() time.Time {
+	if t.now != nil {
+		return t.now()
+	}
+	return time.Now()
+}
+
+// backedOff reports whether sending is stopped because Zharp refused the key. Once the wait is
+// over it lets one body through to try again.
+func (t *transport) backedOff() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.rejected && t.clock().Before(t.retryAt)
+}
+
+// refused stops sending for rejectedBackoff; the warning is printed once, not on every retry.
+func (t *transport) refused(status int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.rejected {
+		announce(fmt.Sprintf("Zharp rejected this API key (HTTP %d) — logs are not being sent. Check ZHARP_API_KEY.", status))
+	}
+	t.rejected = true
+	t.retryAt = t.clock().Add(rejectedBackoff)
+}
+
+// accepted resumes sending after a refusal, and says so once.
+func (t *transport) accepted() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.rejected {
+		t.rejected = false
+		announce("Zharp accepted the API key again — logs are being sent.")
+	}
 }
 
 func (t *transport) post(body []byte) (int, error) {

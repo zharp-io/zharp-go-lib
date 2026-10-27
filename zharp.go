@@ -26,7 +26,7 @@ import (
 )
 
 // Version is this package's version.
-const Version = "0.1.0"
+const Version = "0.1.1"
 
 // sdkName is what requests from this SDK say they are, in the X-Zharp-SDK header.
 const sdkName = "go-logs/" + Version
