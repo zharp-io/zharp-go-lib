@@ -334,6 +334,38 @@ func TestServerErrorsAreRetriedAndRefusalsAreNot(t *testing.T) {
 	}
 }
 
+func TestARefusedKeyStopsSendingForAnHourThenTriesAgain(t *testing.T) {
+	f := newFake(t)
+	clock := time.Unix(0, 0)
+	tr := &transport{apiKey: "k", url: f.URL + "/agent/logs", client: http.DefaultClient, retryDelay: time.Millisecond,
+		now: func() time.Time { return clock }}
+	f.status = 401
+	if !tr.send([]map[string]any{{}}) || len(f.bodies) != 1 {
+		t.Fatalf("401: %d attempts", len(f.bodies))
+	}
+	// Backed off: dropped without a request, and not retried.
+	tr.send([]map[string]any{{}})
+	tr.send([]map[string]any{{}})
+	if len(f.bodies) != 1 {
+		t.Fatalf("sent while backed off: %d", len(f.bodies))
+	}
+	// An hour on, one body tries again; still refused, the wait starts over.
+	clock = clock.Add(rejectedBackoff)
+	f.status = 403
+	tr.send([]map[string]any{{}, {}})
+	if len(f.bodies) != 2 || !tr.backedOff() {
+		t.Fatalf("retry after an hour: %d", len(f.bodies))
+	}
+	// Accepted again: sending resumes.
+	clock = clock.Add(rejectedBackoff)
+	f.status = 201
+	tr.send([]map[string]any{{}})
+	tr.send([]map[string]any{{}})
+	if len(f.bodies) != 4 || tr.backedOff() {
+		t.Fatalf("after recovery: %d", len(f.bodies))
+	}
+}
+
 func TestBodiesAreCutBySizeAndALargeEntryGoesAlone(t *testing.T) {
 	entries := []map[string]any{{"m": strings.Repeat("x", 40)}, {"m": strings.Repeat("x", 40)}, {"m": strings.Repeat("x", 40)}, {"m": strings.Repeat("y", 500)}}
 	bodies := splitBySize(entries, 120)
