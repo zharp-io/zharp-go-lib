@@ -8,4 +8,6 @@
 - `enduser.id` / `session.id` from baggage on every span and log; `zharp.SetUser`, `zharp.SetTag`.
 - Panics and 5xx handler errors reported unhandled; `zharp.CaptureError` (handled); `zharp.Recover`.
 - `zharp.Log.*`, `zharp.Flush`, `zharp.Tracer`.
+- Logs only: `Config.DisableTracing` / `ZHARP_TRACING=false` sends logs and errors with no spans and
+  no outgoing `traceparent`/`baggage`; incoming ones are still read for trace id, user and session.
 - Replaces the logs-only `github.com/zharp-io/zharp-go-lib` 0.1.x package.

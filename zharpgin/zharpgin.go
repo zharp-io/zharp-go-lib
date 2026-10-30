@@ -8,6 +8,9 @@
 // that ends in a 5xx, is reported to Zharp as an unhandled error. Panics still reach gin.Recovery
 // (or net/http) as before.
 //
+// With zharp.Config.DisableTracing (logs only) no span is made or sent; traceparent and baggage are
+// still read, so the request's logs and errors carry its trace id, user and session.
+//
 // It is its own module so the core zharp module doesn't depend on Gin.
 package zharpgin
 

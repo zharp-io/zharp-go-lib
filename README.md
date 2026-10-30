@@ -23,7 +23,7 @@ defer shutdown(context.Background())
 
 Copy the key from **Applications → your app → Setup** in Zharp. Leave fields empty to read them
 from `ZHARP_KEY`, `ZHARP_SERVICE` (then `OTEL_SERVICE_NAME`), `ZHARP_ENVIRONMENT`,
-`ZHARP_RELEASE`, `ZHARP_ENDPOINT`, `ZHARP_SAMPLE_RATE`. `ZHARP_DISABLED=true` turns it off. Init
+`ZHARP_RELEASE`, `ZHARP_ENDPOINT`, `ZHARP_SAMPLE_RATE`, `ZHARP_TRACING`. `ZHARP_DISABLED=true` turns it off. Init
 never panics: without a key it prints one line and sends nothing.
 
 ## Trace requests
@@ -66,6 +66,21 @@ zharp.Log.Info(ctx, "Order placed", "order_id", 42)   // Debug, Info, Warn, Erro
 ```
 
 `Config.KeepSlogDefault` leaves `slog.Default` alone; `zharp.SlogHandler()` gives you the handler.
+
+## Logs only
+
+To send logs and errors without tracing:
+
+```go
+shutdown := zharp.Init(zharp.Config{Key: "zpk_…", Service: "checkout-api", DisableTracing: true})
+```
+
+or `ZHARP_TRACING=false`. Logs (`zharp.Log`, `slog`, `log`), errors (panics, 5xx handler errors,
+`CaptureError`, with the handled flag), `SetUser` and `SetTag` work as usual. No spans are created
+or sent: `zharp.Handler`, `zharpgin` and `zharpecho` make none, `zharp.Tracer()` spans record
+nothing (the code inside still runs), and `zharp.Transport` and the global propagator add no
+`traceparent` or `baggage` to outgoing requests. Incoming `traceparent` and `baggage` are still
+read, so a request's logs and errors carry the caller's trace id, user and session.
 
 ## Errors
 

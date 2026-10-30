@@ -7,6 +7,9 @@
 // the user and session from baggage. A panic, or an error a handler returns that ends in a 5xx,
 // is reported to Zharp as an unhandled error; panics still reach middleware.Recover (or net/http).
 //
+// With zharp.Config.DisableTracing (logs only) no span is made or sent; traceparent and baggage are
+// still read, so the request's logs and errors carry its trace id, user and session.
+//
 // The span comes from github.com/labstack/echo-otel/v4, Echo's own OpenTelemetry middleware —
 // the successor of the deprecated contrib otelecho. It is its own module so the core zharp module
 // doesn't depend on Echo.

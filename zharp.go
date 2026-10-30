@@ -51,7 +51,7 @@ const scopeName = "github.com/zharp-io/zharp-go"
 
 // Config holds the settings for Init. Anything left empty is read from the environment —
 // ZHARP_KEY, ZHARP_SERVICE (then OTEL_SERVICE_NAME), ZHARP_ENVIRONMENT, ZHARP_RELEASE,
-// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE — then defaulted.
+// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING — then defaulted.
 type Config struct {
 	// Key is the app's key (zpk_…) from Applications → your app → Setup. Without one, nothing
 	// is sent.
@@ -68,6 +68,12 @@ type Config struct {
 	// SampleRate is the share of traces kept, 0 < rate ≤ 1. Zero means 1 (keep all). Logs and
 	// errors are always sent.
 	SampleRate float64
+	// DisableTracing sends logs and errors only ("logs only"): no spans are created or exported,
+	// Handler, Transport and the zharpgin/zharpecho middleware trace nothing, and no traceparent or
+	// baggage is sent with outgoing requests. An incoming traceparent and baggage are still read,
+	// so the logs and errors of a request carry its trace_id, user and session. Logs, errors,
+	// SetUser and SetTag work as usual. ZHARP_TRACING=false does the same.
+	DisableTracing bool
 	// KeepSlogDefault leaves slog's default logger alone. By default Init makes slog.Default
 	// (and so the log package) write to the console as before and also send to Zharp.
 	KeepSlogDefault bool
@@ -79,7 +85,8 @@ type Config struct {
 }
 
 type state struct {
-	tracerProvider *sdktrace.TracerProvider
+	tracing        bool
+	tracerProvider *sdktrace.TracerProvider // nil with DisableTracing
 	loggerProvider *sdklog.LoggerProvider
 	logger         otellog.Logger
 	slog           *slog.Logger
@@ -132,7 +139,11 @@ func Init(cfg Config) func(context.Context) error {
 	if cfg.Environment != "" {
 		env = fmt.Sprintf("environment %q", cfg.Environment)
 	}
-	announce(fmt.Sprintf("Application Monitoring active — service %q, %s", cfg.Service, env))
+	mode := ""
+	if cfg.DisableTracing {
+		mode = ", logs only (tracing off)"
+	}
+	announce(fmt.Sprintf("Application Monitoring active — service %q, %s%s", cfg.Service, env, mode))
 
 	return func(ctx context.Context) error {
 		mu.Lock()
@@ -152,20 +163,31 @@ func start(cfg Config) (*state, error) {
 	}
 
 	headers := map[string]string{"Authorization": "Bearer " + cfg.Key}
-	spanProcessor, logProcessor := sdktrace.SpanProcessor(nil), sdklog.Processor(nil)
-	if cfg.SpanExporter != nil {
-		spanProcessor = sdktrace.NewSimpleSpanProcessor(cfg.SpanExporter)
-	} else {
-		exporter, err := otlptracehttp.New(ctx,
-			otlptracehttp.WithEndpointURL(cfg.Endpoint+"/v1/traces"),
-			otlptracehttp.WithHeaders(headers),
-			otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
-		)
-		if err != nil {
-			return nil, err
+	var tp *sdktrace.TracerProvider
+	if !cfg.DisableTracing {
+		spanProcessor := sdktrace.SpanProcessor(nil)
+		if cfg.SpanExporter != nil {
+			spanProcessor = sdktrace.NewSimpleSpanProcessor(cfg.SpanExporter)
+		} else {
+			exporter, err := otlptracehttp.New(ctx,
+				otlptracehttp.WithEndpointURL(cfg.Endpoint+"/v1/traces"),
+				otlptracehttp.WithHeaders(headers),
+				otlptracehttp.WithCompression(otlptracehttp.GzipCompression),
+			)
+			if err != nil {
+				return nil, err
+			}
+			spanProcessor = sdktrace.NewBatchSpanProcessor(exporter, sdktrace.WithBatchTimeout(5*time.Second))
 		}
-		spanProcessor = sdktrace.NewBatchSpanProcessor(exporter, sdktrace.WithBatchTimeout(5*time.Second))
+		tp = sdktrace.NewTracerProvider(
+			sdktrace.WithResource(res),
+			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRate))),
+			sdktrace.WithSpanProcessor(contextSpanProcessor{}),
+			sdktrace.WithSpanProcessor(spanProcessor),
+		)
 	}
+
+	logProcessor := sdklog.Processor(nil)
 	if cfg.LogExporter != nil {
 		logProcessor = sdklog.NewSimpleProcessor(cfg.LogExporter)
 	} else {
@@ -179,25 +201,25 @@ func start(cfg Config) (*state, error) {
 		}
 		logProcessor = sdklog.NewBatchProcessor(exporter, sdklog.WithExportInterval(5*time.Second))
 	}
-
-	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithResource(res),
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRate))),
-		sdktrace.WithSpanProcessor(contextSpanProcessor{}),
-		sdktrace.WithSpanProcessor(spanProcessor),
-	)
 	lp := sdklog.NewLoggerProvider(
 		sdklog.WithResource(res),
 		sdklog.WithProcessor(contextLogProcessor{}),
 		sdklog.WithProcessor(logProcessor),
 	)
 
-	otel.SetTracerProvider(tp)
+	propagator := propagation.TextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	if tp != nil {
+		otel.SetTracerProvider(tp)
+	} else {
+		otel.SetTracerProvider(passthroughTracerProvider{})
+		propagator = extractOnly{propagator}
+	}
 	global.SetLoggerProvider(lp)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+	otel.SetTextMapPropagator(propagator)
 	otel.SetErrorHandler(onceErrorHandler())
 
 	s := &state{
+		tracing:        tp != nil,
 		tracerProvider: tp,
 		loggerProvider: lp,
 		logger:         lp.Logger(scopeName, otellog.WithInstrumentationVersion(Version)),
@@ -210,7 +232,17 @@ func start(cfg Config) (*state, error) {
 }
 
 func (s *state) shutdown(ctx context.Context) error {
-	return errors.Join(s.tracerProvider.Shutdown(ctx), s.loggerProvider.Shutdown(ctx))
+	var err error
+	if s.tracerProvider != nil {
+		err = s.tracerProvider.Shutdown(ctx)
+	}
+	return errors.Join(err, s.loggerProvider.Shutdown(ctx))
+}
+
+// tracingEnabled is false before Init and with DisableTracing.
+func tracingEnabled() bool {
+	s := active()
+	return s != nil && s.tracing
 }
 
 // Flush sends everything queued now — before a serverless function returns, or at the end of a
@@ -220,10 +252,16 @@ func Flush(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
-	return errors.Join(s.tracerProvider.ForceFlush(ctx), s.loggerProvider.ForceFlush(ctx))
+	var err error
+	if s.tracerProvider != nil {
+		err = s.tracerProvider.ForceFlush(ctx)
+	}
+	return errors.Join(err, s.loggerProvider.ForceFlush(ctx))
 }
 
 // Tracer returns a tracer for spans of your own: zharp.Tracer().Start(ctx, "render invoice").
+// With DisableTracing its spans record nothing (the code inside still runs, and its logs carry the
+// incoming trace_id, if any).
 func Tracer() trace.Tracer {
 	return otel.Tracer(scopeName, trace.WithInstrumentationVersion(Version))
 }
@@ -261,6 +299,9 @@ func resolve(cfg Config) Config {
 			cfg.SampleRate = rate
 		}
 	}
+	if !cfg.DisableTracing && isFalse(os.Getenv("ZHARP_TRACING")) {
+		cfg.DisableTracing = true
+	}
 	if cfg.SampleRate <= 0 || cfg.SampleRate > 1 {
 		cfg.SampleRate = 1
 	}
@@ -279,6 +320,14 @@ func first(values ...string) string {
 func isTrue(v string) bool {
 	switch strings.ToLower(strings.TrimSpace(v)) {
 	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+func isFalse(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "0", "false", "no", "off":
 		return true
 	}
 	return false

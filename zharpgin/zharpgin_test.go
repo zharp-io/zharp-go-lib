@@ -148,3 +148,30 @@ func TestHandlerError(t *testing.T) {
 	}
 	_ = http.StatusOK
 }
+
+func TestLogsOnly(t *testing.T) {
+	t.Setenv("ZHARP_TRACING", "false")
+	spans, logs, router := setup(t)
+	if w := serve(router, "/orders/7"); w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
+	}
+	if w := serve(router, "/boom"); w.Code != 500 {
+		t.Fatalf("status %d", w.Code)
+	}
+	if n := len(spans.GetSpans()); n != 0 {
+		t.Fatalf("%d spans with tracing off", n)
+	}
+	var sawLog bool
+	for _, r := range logs.records {
+		if r.Body().Emit() == "order viewed" {
+			sawLog = r.TraceID().String() == traceID && attrs(r)["session.id"] == "test-session"
+		}
+	}
+	if !sawLog {
+		t.Errorf("request log missing or without trace/session: %v", logs.records)
+	}
+	errs := errorLogs(logs)
+	if len(errs) != 1 || errs[0]["exception.message"] != "boom" || errs[0]["zharp.handled"] != "false" || errs[0]["enduser.id"] != "test-user" {
+		t.Fatalf("errors %v", errs)
+	}
+}

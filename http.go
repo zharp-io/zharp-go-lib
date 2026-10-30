@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -15,27 +17,48 @@ import (
 //
 //	http.ListenAndServe(":8080", zharp.Handler(mux))
 //
-// It is otelhttp.NewHandler with Zharp's panic handling and http.route inside it.
+// It is otelhttp.NewHandler with Zharp's panic handling and http.route inside it. With
+// Config.DisableTracing it makes no span: it only reads traceparent and baggage, so the request's
+// logs and errors carry its trace_id, user and session, and still reports panics.
 func Handler(h http.Handler) http.Handler {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer setRoute(r)
 		defer RecoverRequest(w, r)
 		h.ServeHTTP(w, r)
 	})
-	return otelhttp.NewHandler(inner, "http.server")
+	traced := otelhttp.NewHandler(inner, "http.server")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if tracingEnabled() {
+			traced.ServeHTTP(w, r)
+			return
+		}
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+		inner.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 // Transport traces outgoing requests (CLIENT spans) and sends traceparent with them:
 //
 //	client := &http.Client{Transport: zharp.Transport(nil)}
 //
-// Use the request's context (http.NewRequestWithContext) so the call joins its trace.
+// Use the request's context (http.NewRequestWithContext) so the call joins its trace. With
+// Config.DisableTracing requests go straight to base: no span, no traceparent, no baggage.
 func Transport(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	return otelhttp.NewTransport(base)
+	traced := otelhttp.NewTransport(base)
+	return roundTripper(func(r *http.Request) (*http.Response, error) {
+		if tracingEnabled() {
+			return traced.RoundTrip(r)
+		}
+		return base.RoundTrip(r)
+	})
 }
+
+type roundTripper func(*http.Request) (*http.Response, error)
+
+func (f roundTripper) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 // setRoute names the span after the ServeMux pattern that matched, once routing has happened.
 func setRoute(r *http.Request) {
