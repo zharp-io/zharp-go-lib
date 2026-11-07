@@ -13,7 +13,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/zharp-io/zharp-go"
+	zharp "github.com/zharp-io/zharp-go-lib"
 )
 
 func main() {

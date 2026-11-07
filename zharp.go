@@ -42,12 +42,12 @@ import (
 )
 
 // Version is this module's version, sent as telemetry.sdk.version.
-const Version = "0.1.0"
+const Version = "0.2.0"
 
 // DefaultEndpoint is where telemetry goes unless Config.Endpoint or ZHARP_ENDPOINT says otherwise.
 const DefaultEndpoint = "https://api.zharp.io/api/v1/otlp"
 
-const scopeName = "github.com/zharp-io/zharp-go"
+const scopeName = "github.com/zharp-io/zharp-go-lib"
 
 // Config holds the settings for Init. Anything left empty is read from the environment —
 // ZHARP_KEY, ZHARP_SERVICE (then OTEL_SERVICE_NAME), ZHARP_ENVIRONMENT, ZHARP_RELEASE,

@@ -1,4 +1,4 @@
-# zharp-go
+# zharp-go-lib
 
 [Zharp](https://zharp.io) Application Monitoring for Go: every request traced, logs sent with their
 trace, panics and errors grouped into issues. A thin layer over the official
@@ -11,7 +11,11 @@ Full documentation: [zharp.io/docs/sdks/go](https://zharp.io/docs/sdks/go)
 ## Install
 
 ```bash
-go get github.com/zharp-io/zharp-go
+go get github.com/zharp-io/zharp-go-lib
+```
+
+```go
+import zharp "github.com/zharp-io/zharp-go-lib"
 ```
 
 ## Start it
@@ -34,13 +38,13 @@ never panics: without a key it prints one line and sends nothing.
 http.ListenAndServe(":8080", zharp.Handler(mux))
 ```
 
-**Gin** — `go get github.com/zharp-io/zharp-go/zharpgin`
+**Gin** — `go get github.com/zharp-io/zharp-go-lib/zharpgin`
 
 ```go
 router.Use(zharpgin.Middleware())
 ```
 
-**Echo (v4)** — `go get github.com/zharp-io/zharp-go/zharpecho`
+**Echo (v4)** — `go get github.com/zharp-io/zharp-go-lib/zharpecho`
 
 ```go
 e.Use(zharpecho.Middleware())
@@ -113,7 +117,7 @@ ZHARP_KEY=zpk_… ZHARP_ENDPOINT=http://localhost:3000/api/v1/otlp go run ./exam
 ```
 
 `zharpgin` and `zharpecho` are separate modules with a `replace` to the core in this repo; release
-them with their own tags (`zharpgin/v0.1.0`, `zharpecho/v0.1.0`) after tagging the core (`v0.1.0`).
+them with their own tags (`zharpgin/v0.2.0`, `zharpecho/v0.2.0`) after tagging the core (`v0.2.0`).
 
 ## License
 

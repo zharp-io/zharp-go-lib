@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/zharp-io/zharp-go"
+	zharp "github.com/zharp-io/zharp-go-lib"
 )
 
 const traceID = "4bf92f3577b34da6a3ce929d0e0e4736"

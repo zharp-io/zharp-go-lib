@@ -22,7 +22,7 @@ import (
 	echootel "github.com/labstack/echo-otel/v4"
 	"github.com/labstack/echo/v4"
 
-	"github.com/zharp-io/zharp-go"
+	zharp "github.com/zharp-io/zharp-go-lib"
 )
 
 // Middleware returns Echo's OpenTelemetry middleware with Zharp's error reporting inside its span.

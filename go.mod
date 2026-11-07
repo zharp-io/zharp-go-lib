@@ -1,4 +1,4 @@
-module github.com/zharp-io/zharp-go
+module github.com/zharp-io/zharp-go-lib
 
 go 1.26.0
 

@@ -26,7 +26,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/trace/embedded"
 
-	"github.com/zharp-io/zharp-go"
+	zharp "github.com/zharp-io/zharp-go-lib"
 )
 
 // Middleware returns otelgin's middleware with Zharp's error reporting. Options are passed on to
