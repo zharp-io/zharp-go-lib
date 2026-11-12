@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/labstack/echo-otel/v4 v4.0.0
 	github.com/labstack/echo/v4 v4.16.3
-	github.com/zharp-io/zharp-go-lib v0.2.0
+	github.com/zharp-io/zharp-go-lib v0.3.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0

@@ -42,7 +42,7 @@ import (
 )
 
 // Version is this module's version, sent as telemetry.sdk.version.
-const Version = "0.2.0"
+const Version = "0.3.0"
 
 // DefaultEndpoint is where telemetry goes unless Config.Endpoint or ZHARP_ENDPOINT says otherwise.
 const DefaultEndpoint = "https://api.zharp.io/api/v1/otlp"

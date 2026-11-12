@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.3.0 (`github.com/zharp-io/zharp-go-lib`, `…/zharpgin`, `…/zharpecho`)
 
 - `Config.CaptureBodies` / `ZHARP_CAPTURE_BODIES=errors|all`: request and response bodies on HTTP
   spans — `zharp.Handler`, `zharp.Transport`, `zharpgin`, `zharpecho` — as `http.request.body` /
