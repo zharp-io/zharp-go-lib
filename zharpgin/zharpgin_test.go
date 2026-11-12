@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -173,5 +174,60 @@ func TestLogsOnly(t *testing.T) {
 	errs := errorLogs(logs)
 	if len(errs) != 1 || errs[0]["exception.message"] != "boom" || errs[0]["zharp.handled"] != "false" || errs[0]["enduser.id"] != "test-user" {
 		t.Fatalf("errors %v", errs)
+	}
+}
+
+func TestCaptureBodies(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spans := tracetest.NewInMemoryExporter()
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "gin-unit", SpanExporter: spans, LogExporter: &memoryLogs{}, CaptureBodies: &zharp.CaptureBodies{}})
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+	router := gin.New()
+	router.Use(gin.Recovery(), Middleware())
+	router.POST("/signup", func(c *gin.Context) {
+		var in map[string]string
+		_ = c.ShouldBindJSON(&in)
+		c.JSON(422, gin.H{"error": "email " + in["email"] + " taken", "sessionToken": "srv-token"})
+	})
+	router.POST("/ok", func(c *gin.Context) { c.String(200, "fine") })
+	router.POST("/boom", func(c *gin.Context) {
+		_, _ = c.GetRawData()
+		panic("boom")
+	})
+
+	post := func(path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", path, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, r)
+		return w
+	}
+	if w := post("/signup", `{"email":"ada@x.test","password":"pw-secret"}`); w.Code != 422 || !strings.Contains(w.Body.String(), "ada@x.test taken") {
+		t.Fatalf("the app answers as before: %d %s", w.Code, w.Body)
+	}
+	post("/ok", `{"n":1}`)
+	if w := post("/boom", `{"cvv":"123"}`); w.Code != 500 {
+		t.Fatalf("panic: %d", w.Code)
+	}
+
+	var got []tracetest.SpanStub
+	for _, s := range spans.GetSpans() {
+		if s.SpanKind == trace.SpanKindServer {
+			got = append(got, s)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("want 3 server spans, got %d", len(got))
+	}
+	if attr(got[0], "http.request.body") != `{"email":"ada@x.test","password":"[Filtered]"}` ||
+		attr(got[0], "http.response.body") != `{"error":"email ada@x.test taken","sessionToken":"[Filtered]"}` ||
+		!strings.HasPrefix(attr(got[0], "http.response.header.content-type"), "application/json") {
+		t.Fatalf("signup: %v", got[0].Attributes)
+	}
+	if attr(got[1], "http.request.body") != "" {
+		t.Fatalf("errors mode: a 200 carries no bodies: %v", got[1].Attributes)
+	}
+	if attr(got[2], "http.request.body") != `{"cvv":"[Filtered]"}` {
+		t.Fatalf("panic keeps the request body: %v", got[2].Attributes)
 	}
 }

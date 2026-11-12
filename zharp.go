@@ -51,7 +51,7 @@ const scopeName = "github.com/zharp-io/zharp-go-lib"
 
 // Config holds the settings for Init. Anything left empty is read from the environment —
 // ZHARP_KEY, ZHARP_SERVICE (then OTEL_SERVICE_NAME), ZHARP_ENVIRONMENT, ZHARP_RELEASE,
-// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING — then defaulted.
+// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING, ZHARP_CAPTURE_BODIES — then defaulted.
 type Config struct {
 	// Key is the app's key (zpk_…) from Applications → your app → Setup. Without one, nothing
 	// is sent.
@@ -74,6 +74,10 @@ type Config struct {
 	// so the logs and errors of a request carry its trace_id, user and session. Logs, errors,
 	// SetUser and SetTag work as usual. ZHARP_TRACING=false does the same.
 	DisableTracing bool
+	// CaptureBodies puts request and response bodies on HTTP spans (Handler, Transport, zharpgin,
+	// zharpecho). Nil, the default, is off; ZHARP_CAPTURE_BODIES=errors|all turns it on without
+	// code. See CaptureBodies.
+	CaptureBodies *CaptureBodies
 	// KeepSlogDefault leaves slog's default logger alone. By default Init makes slog.Default
 	// (and so the log package) write to the console as before and also send to Zharp.
 	KeepSlogDefault bool
@@ -86,6 +90,7 @@ type Config struct {
 
 type state struct {
 	tracing        bool
+	bodies         *bodySettings            // nil when CaptureBodies is off
 	tracerProvider *sdktrace.TracerProvider // nil with DisableTracing
 	loggerProvider *sdklog.LoggerProvider
 	logger         otellog.Logger
@@ -167,7 +172,7 @@ func start(cfg Config) (*state, error) {
 	if !cfg.DisableTracing {
 		spanProcessor := sdktrace.SpanProcessor(nil)
 		if cfg.SpanExporter != nil {
-			spanProcessor = sdktrace.NewSimpleSpanProcessor(cfg.SpanExporter)
+			spanProcessor = sdktrace.NewSimpleSpanProcessor(urlRedactingExporter{cfg.SpanExporter})
 		} else {
 			exporter, err := otlptracehttp.New(ctx,
 				otlptracehttp.WithEndpointURL(cfg.Endpoint+"/v1/traces"),
@@ -177,7 +182,7 @@ func start(cfg Config) (*state, error) {
 			if err != nil {
 				return nil, err
 			}
-			spanProcessor = sdktrace.NewBatchSpanProcessor(exporter, sdktrace.WithBatchTimeout(5*time.Second))
+			spanProcessor = sdktrace.NewBatchSpanProcessor(urlRedactingExporter{exporter}, sdktrace.WithBatchTimeout(5*time.Second))
 		}
 		tp = sdktrace.NewTracerProvider(
 			sdktrace.WithResource(res),
@@ -220,6 +225,7 @@ func start(cfg Config) (*state, error) {
 
 	s := &state{
 		tracing:        tp != nil,
+		bodies:         bodySettingsFrom(cfg.CaptureBodies),
 		tracerProvider: tp,
 		loggerProvider: lp,
 		logger:         lp.Logger(scopeName, otellog.WithInstrumentationVersion(Version)),

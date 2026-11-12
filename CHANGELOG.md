@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- `Config.CaptureBodies` / `ZHARP_CAPTURE_BODIES=errors|all`: request and response bodies on HTTP
+  spans — `zharp.Handler`, `zharp.Transport`, `zharpgin`, `zharpecho` — as `http.request.body` /
+  `http.response.body` (with `.truncated` and the content types). Off by default; failed requests
+  only unless `Mode: BodiesAll`. Field names kept, secret values `[Filtered]` (a secret object keeps
+  its keys), uploads listed by field with files as `[file name · type · size]`, inline images and
+  binary bodies described, 32 KB default / 128 KB max. Same rules and output as the other Zharp SDKs.
+- Secret-looking query values are `[Filtered]` in `url.full`, `url.query`, `http.url` and
+  `http.target` on every span, with or without `CaptureBodies`.
+- `zharp.CaptureRequestBodies` / `RequestBodies` for router integrations.
+- `zharpgin` and `zharpecho` need the core module from this release for `CaptureBodies`.
+
 ## v0.2.0 (`github.com/zharp-io/zharp-go-lib`, `…/zharpgin`, `…/zharpecho`)
 
 - First release of Zharp Application Monitoring for Go, on OpenTelemetry: `zharp.Init` (OTLP/HTTP

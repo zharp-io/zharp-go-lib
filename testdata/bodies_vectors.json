@@ -1,0 +1,324 @@
+{
+ "bodies": [
+  {
+   "settings": "def",
+   "text": "{\"email\":\"a@b.test\",\"password\":\"hunter2\",\"remember\":true,\"n\":1.50,\"big\":1e21,\"tiny\":1e-7,\"small\":0.00001,\"neg\":-0,\"huge\":123456789012345678901}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"email\":\"a@b.test\",\"password\":\"[Filtered]\",\"remember\":true,\"n\":1.5,\"big\":1e+21,\"tiny\":1e-7,\"small\":0.00001,\"neg\":0,\"huge\":123456789012345680000}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"card\":{\"brand\":\"visa\",\"last4\":\"4242\",\"nested\":{\"x\":[1,2,{\"cvv\":\"123\"}]}},\"items\":[{\"token\":\"t\"},{\"token\":\"\"},{\"pin\":null}]}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"card\":{\"brand\":\"[Filtered]\",\"last4\":\"[Filtered]\",\"nested\":{\"x\":[\"[Filtered]\",\"[Filtered]\",{\"cvv\":\"[Filtered]\"}]}},\"items\":[{\"token\":\"[Filtered]\"},{\"token\":\"\"},{\"pin\":null}]}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"b\":1,\"2\":2,\"a\":3,\"1\":4,\"b\":5,\"01\":6}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"1\":4,\"2\":2,\"b\":5,\"a\":3,\"01\":6}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"s\":\"quote\\\" back\\ nl\n tab\t ctrl\u0001 ls  lt< amp& emoji😀 é\"}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"s\":\"quote\\\" back\\ nl\n tab\t ctrl\u0001 ls  lt< amp& emoji😀 é\"}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"avatar\":\"data:image/png;base64,iVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgo\",\"blob\":\"QUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJDQUJD1\",\"name\":\"Ada\",\"short\":\"QUJD\"}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"avatar\":\"[image/png · 825 B]\",\"blob\":\"[base64 · 1 KB]\",\"name\":\"Ada\",\"short\":\"QUJD\"}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"avatar\":\"data:image/png;base64,iVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KG",
+   "type": "application/json",
+   "cut": true,
+   "value": "{\"avatar\":\"[image/png · 650 B+]\"",
+   "truncated": true
+  },
+  {
+   "settings": "def",
+   "text": "{\"password\": \"x\", \"token\":123, \"ok\": \"fine\", \"secret\": true, \"half\": \"abc",
+   "type": "application/json",
+   "cut": true,
+   "value": "{\"password\": \"[Filtered]\", \"token\":\"[Filtered]\", \"ok\": \"fine\", \"secret\": \"[Filtered]\", \"half\": \"abc",
+   "truncated": true
+  },
+  {
+   "settings": "def",
+   "text": "user=ada&password=p4ss&blob=data%3Aimage%2Fpng%3Bbase64%2CiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgoiVBORw0KGgo&x",
+   "type": "application/x-www-form-urlencoded",
+   "cut": false,
+   "value": "user=ada&password=[Filtered]&blob=[image/png · 825 B]&x",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "plain text body with \"password\":\"inside\" text",
+   "type": "text/plain",
+   "cut": false,
+   "value": "plain text body with \"password\":\"[Filtered]\" text",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "[1,\"two\",{\"apiKey\":\"k\",\"Access-Token\":\"t\",\"author\":\"me\",\"authority\":\"x\",\"pwd\":\"p\",\"session\":\"s\",\"sessionId\":\"i\"}]",
+   "type": "application/json",
+   "cut": false,
+   "value": "[1,\"two\",{\"apiKey\":\"[Filtered]\",\"Access-Token\":\"[Filtered]\",\"author\":\"me\",\"authority\":\"x\",\"pwd\":\"[Filtered]\",\"session\":\"s\",\"sessionId\":\"[Filtered]\"}]",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "   ",
+   "type": "application/json",
+   "cut": false,
+   "value": null,
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"a\":1} trailing",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"a\":1} trailing",
+   "truncated": false
+  },
+  {
+   "settings": "small",
+   "text": "{\"aaaaaaaaaa\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"aaaaaaaaaa\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+   "truncated": true
+  },
+  {
+   "settings": "small",
+   "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "type": "text/plain",
+   "cut": false,
+   "value": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+   "truncated": true
+  },
+  {
+   "settings": "extra",
+   "text": "{\"dateOfBirth\":\"1990\",\"accountNumber\":\"1\",\"account-number\":\"2\",\"other\":\"3\"}",
+   "type": "application/json",
+   "cut": false,
+   "value": "{\"dateOfBirth\":\"[Filtered]\",\"accountNumber\":\"[Filtered]\",\"account-number\":\"[Filtered]\",\"other\":\"3\"}",
+   "truncated": false
+  },
+  {
+   "settings": "def",
+   "text": "{\"fields\":{\"title\":\"Holiday\",\"password\":\"upload-secret\",\"avatar\":\"[file me.png · image/png · 100 KB]\",\"tags\":[\"a\",\"b\"]}}",
+   "type": "multipart/form-data; boundary=x",
+   "cut": false,
+   "value": "{\"fields\":{\"title\":\"Holiday\",\"password\":\"[Filtered]\",\"avatar\":\"[file me.png · image/png · 100 KB]\",\"tags\":[\"a\",\"b\"]}}",
+   "truncated": false
+  }
+ ],
+ "urls": [
+  {
+   "in": "https://u:p@api.x.test/a?token=abc&page=2&key=k&sig=s&code=c&state=st&session=se&sessions=3&pwd=p&empty=&flag#frag?token=z",
+   "out": "https://api.x.test/a?token=[Filtered]&page=2&key=[Filtered]&sig=[Filtered]&code=[Filtered]&state=[Filtered]&session=[Filtered]&sessions=3&pwd=[Filtered]&empty=&flag#frag?token=z"
+  },
+  {
+   "in": "/p?Access_Token=1&x=2",
+   "out": "/p?Access_Token=[Filtered]&x=2"
+  },
+  {
+   "in": "http://h/no-query",
+   "out": "http://h/no-query"
+  },
+  {
+   "in": "?password=a%20b&ok=1",
+   "out": "?password=[Filtered]&ok=1"
+  },
+  {
+   "in": "https://x.test/?a+b=1&api%5Fkey=2",
+   "out": "https://x.test/?a+b=1&api%5Fkey=[Filtered]"
+  }
+ ],
+ "sizes": [
+  {
+   "in": 0,
+   "out": "0 B"
+  },
+  {
+   "in": 1,
+   "out": "1 B"
+  },
+  {
+   "in": 1023,
+   "out": "1023 B"
+  },
+  {
+   "in": 1024,
+   "out": "1 KB"
+  },
+  {
+   "in": 1535,
+   "out": "1 KB"
+  },
+  {
+   "in": 1536,
+   "out": "2 KB"
+  },
+  {
+   "in": 2048,
+   "out": "2 KB"
+  },
+  {
+   "in": 1048575,
+   "out": "1024 KB"
+  },
+  {
+   "in": 1048576,
+   "out": "1.0 MB"
+  },
+  {
+   "in": 1310720,
+   "out": "1.3 MB"
+  },
+  {
+   "in": 1363148,
+   "out": "1.3 MB"
+  },
+  {
+   "in": 5000000,
+   "out": "4.8 MB"
+  }
+ ],
+ "labels": [
+  {
+   "name": "photo.png",
+   "type": "image/png",
+   "size": 2048,
+   "partial": false,
+   "out": "[file photo.png · image/png · 2 KB]"
+  },
+  {
+   "name": "",
+   "type": "",
+   "size": 5,
+   "partial": true,
+   "out": "[file blob · 5 B+]"
+  }
+ ],
+ "describe": [
+  {
+   "type": "image/png; charset=x",
+   "size": 3000,
+   "out": "[binary · image/png · 3 KB]"
+  },
+  {
+   "type": "text/event-stream",
+   "size": 9,
+   "out": "[event stream]"
+  },
+  {
+   "type": "",
+   "size": 0,
+   "out": "[binary]"
+  },
+  {
+   "type": "application/pdf",
+   "size": 1500000,
+   "out": "[binary · application/pdf · 1.4 MB]"
+  }
+ ],
+ "secret": [
+  {
+   "key": "password",
+   "out": true
+  },
+  {
+   "key": "X-Api-Key",
+   "out": true
+  },
+  {
+   "key": "authorization",
+   "out": true
+  },
+  {
+   "key": "author",
+   "out": false
+  },
+  {
+   "key": "auth",
+   "out": true
+  },
+  {
+   "key": "pin",
+   "out": true
+  },
+  {
+   "key": "pinned",
+   "out": false
+  },
+  {
+   "key": "pwd",
+   "out": true
+  },
+  {
+   "key": "session",
+   "out": false
+  },
+  {
+   "key": "sessionId",
+   "out": true
+  },
+  {
+   "key": "key",
+   "out": false
+  },
+  {
+   "key": "card",
+   "out": true
+  },
+  {
+   "key": "cardholder",
+   "out": false
+  },
+  {
+   "key": "ssn",
+   "out": true
+  },
+  {
+   "key": "credentials",
+   "out": true
+  },
+  {
+   "key": "signature",
+   "out": true
+  },
+  {
+   "key": "iban",
+   "out": true
+  },
+  {
+   "key": "otp",
+   "out": true
+  },
+  {
+   "key": "jwt",
+   "out": true
+  },
+  {
+   "key": "code_verifier",
+   "out": true
+  }
+ ]
+}

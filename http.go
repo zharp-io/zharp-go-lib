@@ -1,6 +1,8 @@
 package zharp
 
 import (
+	"context"
+	"io"
 	"net/http"
 	"strings"
 
@@ -23,6 +25,13 @@ import (
 func Handler(h http.Handler) http.Handler {
 	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer setRoute(r)
+		// Config.CaptureBodies: the handler reads and writes through a copy-keeping layer, and the
+		// bodies go on the span once the response (a recovered panic's 500 included) is written.
+		if bodies := CaptureRequestBodies(r); bodies != nil {
+			w = bodies.ResponseWriter(w)
+			r.Body = bodies.Request(r.Body)
+			defer func() { bodies.End(trace.SpanFromContext(r.Context()), bodies.Status()) }()
+		}
 		defer RecoverRequest(w, r)
 		h.ServeHTTP(w, r)
 	})
@@ -47,12 +56,25 @@ func Transport(base http.RoundTripper) http.RoundTripper {
 	if base == nil {
 		base = http.DefaultTransport
 	}
-	traced := otelhttp.NewTransport(base)
+	traced := otelhttp.NewTransport(captureTransport{base})
 	return roundTripper(func(r *http.Request) (*http.Response, error) {
-		if tracingEnabled() {
+		if !tracingEnabled() {
+			return base.RoundTrip(r)
+		}
+		s := activeBodies()
+		if s == nil || r.URL == nil || !s.allowed(r.URL.String()) {
 			return traced.RoundTrip(r)
 		}
-		return base.RoundTrip(r)
+		// Config.CaptureBodies: captureTransport, under otelhttp, finds this by the context.
+		c := newClientBodies(s, r)
+		resp, err := traced.RoundTrip(r.WithContext(context.WithValue(r.Context(), clientBodiesKey{}, c)))
+		if err == nil && resp != nil && resp.Body != nil && resp.Body != http.NoBody {
+			// A protocol switch's body is also a Writer; that one is left as it is.
+			if _, upgraded := resp.Body.(io.ReadWriteCloser); !upgraded {
+				resp.Body = &closeFirst{ReadCloser: resp.Body, c: c}
+			}
+		}
+		return resp, err
 	})
 }
 

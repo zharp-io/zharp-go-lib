@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"io"
 	"net/http"
+	"strings"
 	"net/http/httptest"
 	"sync"
 	"testing"
@@ -170,5 +172,67 @@ func TestLogsOnly(t *testing.T) {
 	errs := errorLogs(logs)
 	if len(errs) != 1 || errs[0]["exception.message"] != "boom" || errs[0]["zharp.handled"] != "false" || errs[0]["enduser.id"] != "test-user" {
 		t.Fatalf("errors %v", errs)
+	}
+}
+
+func TestCaptureBodies(t *testing.T) {
+	spans := tracetest.NewInMemoryExporter()
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "echo-unit", SpanExporter: spans, LogExporter: &memoryLogs{}, CaptureBodies: &zharp.CaptureBodies{}})
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+	e := echo.New()
+	e.Use(middleware.Recover(), Middleware())
+	e.POST("/signup", func(c echo.Context) error {
+		var in map[string]string
+		_ = c.Bind(&in)
+		return c.JSON(422, map[string]string{"error": "email " + in["email"] + " taken", "sessionToken": "srv-token"})
+	})
+	e.POST("/ok", func(c echo.Context) error { return c.String(200, "fine") })
+	e.POST("/fail", func(c echo.Context) error {
+		_, _ = io.ReadAll(c.Request().Body)
+		return errors.New("database down")
+	})
+
+	post := func(path, body string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", path, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		e.ServeHTTP(w, r)
+		return w
+	}
+	if w := post("/signup", `{"email":"ada@x.test","password":"pw-secret"}`); w.Code != 422 || !strings.Contains(w.Body.String(), "ada@x.test taken") {
+		t.Fatalf("the app answers as before: %d %s", w.Code, w.Body)
+	}
+	post("/ok", `{"n":1}`)
+	if w := post("/fail", `{"token":"t","q":2}`); w.Code != 500 {
+		t.Fatalf("returned error: %d", w.Code)
+	}
+
+	var got []tracetest.SpanStub
+	for _, s := range spans.GetSpans() {
+		if s.SpanKind == trace.SpanKindServer {
+			got = append(got, s)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("want 3 server spans, got %d", len(got))
+	}
+	value := func(s tracetest.SpanStub, key string) string {
+		for _, kv := range s.Attributes {
+			if string(kv.Key) == key {
+				return kv.Value.Emit()
+			}
+		}
+		return ""
+	}
+	if value(got[0], "http.request.body") != `{"email":"ada@x.test","password":"[Filtered]"}` ||
+		value(got[0], "http.response.body") != `{"error":"email ada@x.test taken","sessionToken":"[Filtered]"}` {
+		t.Fatalf("signup: %v", got[0].Attributes)
+	}
+	if value(got[1], "http.request.body") != "" {
+		t.Fatalf("errors mode: a 200 carries no bodies: %v", got[1].Attributes)
+	}
+	// The error response is written by Echo after the span: the request body is there.
+	if value(got[2], "http.request.body") != `{"token":"[Filtered]","q":2}` {
+		t.Fatalf("returned error keeps the request body: %v", got[2].Attributes)
 	}
 }

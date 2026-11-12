@@ -59,6 +59,40 @@ so is an error a Gin/Echo handler returns that ends in a 5xx.
 Outgoing calls: `&http.Client{Transport: zharp.Transport(nil)}`, with `http.NewRequestWithContext`.
 Gin and Echo live in their own modules, so the core module doesn't pull them in.
 
+Secret-looking query values (`?token=`, `key`, `sig`, `password`, `session`, …) are recorded as
+`[Filtered]` in every span's URL, whatever made the span.
+
+### Request and response bodies
+
+Off by default. With `CaptureBodies`, the spans of incoming requests (`zharp.Handler`, `zharpgin`,
+`zharpecho`) and of outgoing calls (`zharp.Transport`) carry what was sent and what came back:
+
+```go
+zharp.Init(zharp.Config{Key: "zpk_…", Service: "checkout-api",
+	CaptureBodies: &zharp.CaptureBodies{}, // failed requests only; Mode: zharp.BodiesAll for every request
+})
+```
+
+or `ZHARP_CAPTURE_BODIES=errors` (or `all`) in the environment. More control:
+`&zharp.CaptureBodies{Mode: zharp.BodiesAll, MaxSize: 4096, RedactKeys: []string{"dateOfBirth"}, URLs: []string{"api.example.com"}}`.
+
+- The default keeps bodies only for requests that answered 400 and above (or got no response).
+- Text — JSON, forms, XML, plain text — is kept up to 32 KB (`MaxSize`, up to 128 KB). Gzip and
+  deflate bodies are inflated first.
+- Every field name is kept. A file upload (`multipart/form-data`) shows each text field and each
+  file as `[file photo.png · image/png · 240 KB]`; inline images and long base64 values as
+  `[image/png · 24 KB]`; a body that isn't text as `[binary · application/pdf · 1.2 MB]` or
+  `[event stream]`. File bytes are counted as they pass, never kept.
+- Values under keys that look secret — `password`, `pwd`, `token`, `secret`, `apiKey`,
+  `authorization`, `cookie`, `card`, `cvv`, `ssn` and similar — become `[Filtered]` in your process,
+  before anything is sent; under a secret object such as `card`, each value inside is hidden and its
+  keys kept. Anything else, such as names and email addresses, is sent as it is: add those keys to
+  `RedactKeys`.
+- Handlers read and write exactly as before; the SDK keeps a copy of the first bytes only.
+- Echo: an error a handler returns is written by Echo after the span ends, so that request's body
+  is captured but its error response isn't — unless echo-otel's `OnNextError` writes it inside the
+  span (`func(c echo.Context, err error) { c.Error(err) }`).
+
 ## Logs
 
 `slog` is bridged: after `Init`, `slog.InfoContext(ctx, …)` — and the `log` package — prints as
