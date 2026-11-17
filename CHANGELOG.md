@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.4.0 (`github.com/zharp-io/zharp-go-lib`, `…/zharpgin`, `…/zharpecho`; new: `…/zharpzap`, `…/zharplogrus`, `…/zharpzerolog` v0.1.0) — 2026-11-17
+
+**Behaviour change:** slog and the `log` package are no longer sent to Zharp unless `Logs` is on (`ZHARP_LOGS=true`). Lines logged in a request end with `trace_id=… span_id=…` and the Zharp agent brings them in; errors, traces and `zharp.Log` are sent as before.
 
 - Logs are off by default (`Config.Logs`, `ZHARP_LOGS=true` turns them on): what the app logs and
   prints reaches Zharp through the Zharp agent, and sending it from the SDK too made every line

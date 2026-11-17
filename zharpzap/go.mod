@@ -3,7 +3,7 @@ module github.com/zharp-io/zharp-go-lib/zharpzap
 go 1.26.0
 
 require (
-	github.com/zharp-io/zharp-go-lib v0.3.0
+	github.com/zharp-io/zharp-go-lib v0.4.0
 	go.opentelemetry.io/contrib/bridges/otelzap v0.21.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0

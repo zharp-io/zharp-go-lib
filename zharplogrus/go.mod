@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/sirupsen/logrus v1.10.2
-	github.com/zharp-io/zharp-go-lib v0.3.0
+	github.com/zharp-io/zharp-go-lib v0.4.0
 	go.opentelemetry.io/contrib/bridges/otellogrus v0.21.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
