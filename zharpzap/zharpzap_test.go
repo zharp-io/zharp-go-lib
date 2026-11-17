@@ -62,7 +62,7 @@ func TestWrapSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	toBuffer := Wrap(zap.New(jsonCore(zapcore.AddSync(&printed))))
 
 	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
-	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zap-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true})
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zap-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true, Logs: zharp.Bool(true)})
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 
 	// Printing to the captured stdout: the printed line must not be sent again.
@@ -107,5 +107,35 @@ func TestWrapSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	}
 	if !strings.Contains(printed.String(), `"msg":"zap to a buffer"`) || strings.Contains(printed.String(), "context") {
 		t.Errorf("printed output changed: %s", printed.String())
+	}
+}
+
+func TestLogsOffStillStamps(t *testing.T) {
+	t.Setenv("ZHARP_LOGS", "")
+	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zap-unit", SpanExporter: spans, LogExporter: logs})
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	var printed bytes.Buffer
+	logger := Wrap(zap.New(jsonCore(zapcore.AddSync(&printed))))
+	ctx, span := zharp.Tracer().Start(context.Background(), "checkout")
+	logger.Info("zap in a request", zap.Int("order_id", 42), Context(ctx))
+	logger.With(Context(ctx)).Info("zap with context")
+	logger.Info("zap outside a request")
+	logger.Info("zap own trace", zap.String("trace_id", "mine"), Context(ctx))
+	span.End()
+	_ = zharp.Flush(context.Background())
+
+	if n := len(logs.byBody()); n != 0 {
+		t.Errorf("%d records sent with logs off", n)
+	}
+	lines := strings.Split(strings.TrimSpace(printed.String()), "\n")
+	tid, sid := span.SpanContext().TraceID().String(), span.SpanContext().SpanID().String()
+	stamp := `,"trace_id":"` + tid + `","span_id":"` + sid + `"}`
+	if !strings.HasSuffix(lines[0], `"order_id":42`+stamp) || !strings.HasSuffix(lines[1], stamp) {
+		t.Errorf("not stamped as the last fields:\n%s\n%s", lines[0], lines[1])
+	}
+	if strings.Contains(lines[2], "trace_id") || strings.Count(lines[3], "trace_id") != 1 {
+		t.Errorf("stamped where it shouldn't:\n%s\n%s", lines[2], lines[3])
 	}
 }

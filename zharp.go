@@ -44,15 +44,15 @@ import (
 // Version is this module's version, sent as telemetry.sdk.version.
 const Version = "0.3.0"
 
-// DefaultEndpoint is where telemetry goes unless Config.Endpoint or ZHARP_ENDPOINT says otherwise.
+// DefaultEndpoint is where telemetry goes.
 const DefaultEndpoint = "https://api.zharp.io/api/v1/otlp"
 
 const scopeName = "github.com/zharp-io/zharp-go-lib"
 
 // Config holds the settings for Init. Anything left empty is read from the environment —
 // ZHARP_KEY, ZHARP_SERVICE (then OTEL_SERVICE_NAME), ZHARP_ENVIRONMENT, ZHARP_RELEASE,
-// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING, ZHARP_CAPTURE_BODIES, ZHARP_CAPTURE_OUTPUT —
-// then defaulted.
+// ZHARP_SAMPLE_RATE, ZHARP_TRACING, ZHARP_CAPTURE_BODIES, ZHARP_LOGS, ZHARP_LOG_CORRELATION,
+// ZHARP_CAPTURE_OUTPUT — then defaulted.
 type Config struct {
 	// Key is the app's key (zpk_…) from Applications → your app → Setup. Without one, nothing
 	// is sent.
@@ -64,7 +64,7 @@ type Config struct {
 	Environment string
 	// Release, e.g. "api@2.3.0" — the service.version.
 	Release string
-	// Endpoint is the OTLP base URL. Defaults to https://api.zharp.io/api/v1/otlp.
+	// Endpoint is for Zharp's own testing; leave it empty.
 	Endpoint string
 	// SampleRate is the share of traces kept, 0 < rate ≤ 1. Zero means 1 (keep all). Logs and
 	// errors are always sent.
@@ -79,10 +79,28 @@ type Config struct {
 	// zharpecho). Nil, the default, is off; ZHARP_CAPTURE_BODIES=errors|all turns it on without
 	// code. See CaptureBodies.
 	CaptureBodies *CaptureBodies
-	// KeepSlogDefault leaves slog's default logger alone. By default Init makes slog.Default
-	// (and so the log package) write to the console as before and also send to Zharp.
+	// Logs sends what the app logs — slog, the log package, and zap/logrus/zerolog through the
+	// zharpzap/zharplogrus/zharpzerolog modules — to Zharp. Nil, the default, is off, unless
+	// ZHARP_LOGS=true: where the Zharp agent reads the app's output (a server, a pod) it already
+	// brings those lines in, stamped with their request (see LogCorrelation), and sending them too
+	// would make every line arrive twice. Turn it on where there is no agent, such as serverless.
+	// Errors, traces and zharp.Log calls are sent either way.
+	//
+	//	Logs: zharp.Bool(true)
+	Logs *bool
+	// LogCorrelation stamps every line logged during a request with the request's ids: a text line
+	// ends with " trace_id=<32 hex> span_id=<16 hex>", a JSON line gets "trace_id" and "span_id"
+	// fields. The agent's copy of the line is then linked to its request. It covers slog (and the
+	// log package's default logger), WrapSlogHandler and the zharpzap/zharplogrus/zharpzerolog
+	// modules; lines printed with fmt can't be stamped. Lines outside a request and lines that
+	// already carry a trace_id are left alone. Nil, the default, is on, unless
+	// ZHARP_LOG_CORRELATION=false.
+	LogCorrelation *bool
+	// KeepSlogDefault leaves slog's default logger alone: its lines are neither stamped nor sent.
+	// By default Init makes slog.Default (and so the log package) print as before — with the stamp
+	// — and, with Logs on, also send to Zharp.
 	KeepSlogDefault bool
-	// CaptureOutput also sends every line printed to os.Stdout and os.Stderr — fmt.Println, a
+	// CaptureOutput (only with Logs on) also sends every line printed to os.Stdout and os.Stderr — fmt.Println, a
 	// log.Logger or zap/zerolog/logrus logger writing to them, anything — that the exact captures
 	// (slog, the log package, zharpzap, zharplogrus, zharpzerolog) didn't already send. Each line
 	// still prints exactly as before. Its level is read from the line (a JSON record's level,
@@ -102,6 +120,8 @@ type Config struct {
 
 type state struct {
 	tracing        bool
+	logs           bool                     // send what the app logs
+	correlation    bool                     // stamp lines with the request's ids
 	bodies         *bodySettings            // nil when CaptureBodies is off
 	tracerProvider *sdktrace.TracerProvider // nil with DisableTracing
 	loggerProvider *sdklog.LoggerProvider
@@ -166,8 +186,11 @@ func Init(cfg Config) func(context.Context) error {
 	if cfg.DisableTracing {
 		mode = ", logs only (tracing off)"
 	}
-	if cfg.CaptureOutput {
-		mode += ", capturing stdout/stderr"
+	if *cfg.Logs {
+		mode += ", sending logs"
+		if cfg.CaptureOutput {
+			mode += " and stdout/stderr"
+		}
 	}
 	announce(fmt.Sprintf("Application Monitoring active — service %q, %s%s", cfg.Service, env, mode))
 
@@ -259,9 +282,10 @@ func start(cfg Config) (*state, error) {
 		loggerProvider: lp,
 		logger:         lp.Logger(scopeName, otellog.WithInstrumentationVersion(Version)),
 	}
+	s.logs, s.correlation = *cfg.Logs, *cfg.LogCorrelation
 	s.slog = slog.New(newOtelSlogHandler(lp))
 	if !cfg.KeepSlogDefault {
-		installSlogDefault(s.slog.Handler())
+		installSlogDefault(s.logs, s.correlation)
 	}
 	return s, nil
 }
@@ -335,8 +359,13 @@ func resolve(cfg Config) Config {
 			cfg.SampleRate = rate
 		}
 	}
+	cfg.Logs = Bool(switchOn(cfg.Logs, "ZHARP_LOGS", false))
+	cfg.LogCorrelation = Bool(switchOn(cfg.LogCorrelation, "ZHARP_LOG_CORRELATION", true))
 	if !cfg.CaptureOutput && isTrue(os.Getenv("ZHARP_CAPTURE_OUTPUT")) {
 		cfg.CaptureOutput = true
+	}
+	if !*cfg.Logs {
+		cfg.CaptureOutput = false // it refines Logs; nothing printed is sent with Logs off
 	}
 	if !cfg.DisableTracing && isFalse(os.Getenv("ZHARP_TRACING")) {
 		cfg.DisableTracing = true
@@ -345,6 +374,23 @@ func resolve(cfg Config) Config {
 		cfg.SampleRate = 1
 	}
 	return cfg
+}
+
+// Bool returns a pointer to v, for Config.Logs and Config.LogCorrelation.
+func Bool(v bool) *bool { return &v }
+
+// switchOn is the option when set, else the environment variable when it says yes or no, else
+// fallback.
+func switchOn(option *bool, variable string, fallback bool) bool {
+	if option != nil {
+		return *option
+	}
+	if v := os.Getenv(variable); isTrue(v) {
+		return true
+	} else if isFalse(v) {
+		return false
+	}
+	return fallback
 }
 
 func first(values ...string) string {

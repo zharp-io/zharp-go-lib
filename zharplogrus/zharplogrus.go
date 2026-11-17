@@ -7,8 +7,11 @@
 //
 //	logrus.WithContext(r.Context()).WithField("order_id", 42).Info("Order placed")
 //
-// The logger prints exactly as before; a hook sends each entry its level lets through to Zharp.
-// Built on the OpenTelemetry otellogrus bridge.
+// An entry logged with the request's context (WithContext) is printed ending with
+// " trace_id=… span_id=…" — or with those fields, for the JSON formatter — so the Zharp agent links
+// the line to its request (zharp.Config.LogCorrelation). With zharp.Config.Logs on, a hook also
+// sends each entry the logger's level lets through to Zharp. Built on the OpenTelemetry otellogrus
+// bridge.
 package zharplogrus
 
 import (
@@ -23,6 +26,17 @@ import (
 
 const scopeName = "github.com/zharp-io/zharp-go-lib/zharplogrus"
 
+// stampFormatter ends a line logged in a request with its trace_id and span_id.
+type stampFormatter struct{ next logrus.Formatter }
+
+func (f stampFormatter) Format(e *logrus.Entry) ([]byte, error) {
+	b, err := f.next.Format(e)
+	if err != nil {
+		return b, err
+	}
+	return zharp.StampLine(e.Context, b), nil
+}
+
 // Hook returns a logrus hook that sends every entry to Zharp. It may be made before zharp.Init;
 // entries go to whichever Init is active (nowhere before Init).
 func Hook() logrus.Hook {
@@ -31,14 +45,32 @@ func Hook() logrus.Hook {
 
 var exitOnce sync.Once
 
-// Install adds the hook to each logger (the standard logger when none is given), and has
-// logrus.Fatal send what is queued before the process exits.
+func hooked(l *logrus.Logger) bool {
+	for _, hooks := range l.Hooks {
+		for _, h := range hooks {
+			if _, ok := h.(*otellogrus.Hook); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Install stamps each logger's lines and adds the hook (the standard logger when none is given),
+// and has logrus.Fatal send what is queued before the process exits. Call Install after setting a
+// formatter: SetFormatter replaces the stamping one.
 func Install(loggers ...*logrus.Logger) {
 	if len(loggers) == 0 {
 		loggers = []*logrus.Logger{logrus.StandardLogger()}
 	}
 	for _, l := range loggers {
-		if l != nil {
+		if l == nil {
+			continue
+		}
+		if _, ok := l.Formatter.(stampFormatter); !ok && l.Formatter != nil {
+			l.SetFormatter(stampFormatter{next: l.Formatter})
+		}
+		if !hooked(l) {
 			l.AddHook(Hook())
 		}
 	}

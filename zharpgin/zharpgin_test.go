@@ -5,8 +5,8 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 
@@ -49,7 +49,7 @@ func attrs(r sdklog.Record) map[string]string {
 func setup(t *testing.T) (*tracetest.InMemoryExporter, *memoryLogs, *gin.Engine) {
 	gin.SetMode(gin.TestMode)
 	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
-	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "gin-unit", SpanExporter: spans, LogExporter: logs})
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "gin-unit", SpanExporter: spans, LogExporter: logs, Logs: zharp.Bool(true)})
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 
 	router := gin.New()

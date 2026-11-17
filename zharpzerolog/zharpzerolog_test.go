@@ -56,7 +56,7 @@ func TestWriterSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	toBuffer := zerolog.New(Writer(&printed)).Hook(TraceHook{}) // before Init: follows the active Init
 
 	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
-	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zerolog-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true})
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zerolog-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true, Logs: zharp.Bool(true)})
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 
 	// JSON to the captured stdout, and a ConsoleWriter on it: neither printed line is sent again.
@@ -107,5 +107,36 @@ func TestWriterSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	want := `{"level":"info","trace_id":"` + span.SpanContext().TraceID().String() + `","span_id":"` + span.SpanContext().SpanID().String() + `","message":"zerolog to a buffer"}` + "\n"
 	if printed.String() != want {
 		t.Errorf("printed %q\nwant    %q", printed.String(), want)
+	}
+}
+
+func TestLogsOffStillStamps(t *testing.T) {
+	t.Setenv("ZHARP_LOGS", "")
+	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "zerolog-unit", SpanExporter: spans, LogExporter: logs})
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	var js, console bytes.Buffer
+	jsonLogger := zerolog.New(Writer(&js)).Hook(TraceHook{})
+	consoleLogger := zerolog.New(Writer(zerolog.ConsoleWriter{Out: &console, NoColor: true})).Hook(TraceHook{})
+	ctx, span := zharp.Tracer().Start(context.Background(), "checkout")
+	jsonLogger.Info().Ctx(ctx).Msg("zerolog json in a request")
+	jsonLogger.Info().Msg("zerolog json outside a request")
+	consoleLogger.Info().Ctx(ctx).Str("region", "eu").Msg("zerolog console in a request")
+	consoleLogger.Info().Msg("zerolog console outside a request")
+	span.End()
+	_ = zharp.Flush(context.Background())
+
+	if n := len(logs.byBody()); n != 0 {
+		t.Errorf("%d records sent with logs off", n)
+	}
+	tid, sid := span.SpanContext().TraceID().String(), span.SpanContext().SpanID().String()
+	j := strings.Split(strings.TrimSpace(js.String()), "\n")
+	if !strings.Contains(j[0], `"trace_id":"`+tid+`","span_id":"`+sid+`"`) || strings.Contains(j[1], "trace_id") {
+		t.Errorf("json lines:\n%s\n%s", j[0], j[1])
+	}
+	c := strings.Split(strings.TrimSpace(console.String()), "\n")
+	if !strings.HasSuffix(c[0], "region=eu trace_id="+tid+" span_id="+sid) || strings.Contains(c[1], "trace_id") {
+		t.Errorf("console lines:\n%s\n%s", c[0], c[1])
 	}
 }

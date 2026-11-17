@@ -61,7 +61,7 @@ func setup(t *testing.T) (*tracetest.InMemoryExporter, *memoryLogs) {
 	logs := &memoryLogs{}
 	shutdown := Init(Config{
 		Key: "zpk_test", Service: "go-unit", Environment: "test", Release: "api@1.0.0",
-		SpanExporter: spans, LogExporter: logs,
+		SpanExporter: spans, LogExporter: logs, Logs: Bool(true),
 	})
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 	return spans, logs

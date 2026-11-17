@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Logs are off by default (`Config.Logs`, `ZHARP_LOGS=true` turns them on): what the app logs and
+  prints reaches Zharp through the Zharp agent, and sending it from the SDK too made every line
+  arrive twice. Errors, traces and `zharp.Log` are sent as before. Turn logs on where there is no
+  agent (serverless). Breaking for apps that relied on slog being sent: set `Logs: zharp.Bool(true)`.
+- Every line logged during a request is stamped with its ids, so Zharp links the agent's copy to the
+  request: a text line ends with ` trace_id=<32 hex> span_id=<16 hex>`, a JSON line gets `trace_id`
+  and `span_id` fields. slog's default, `WrapSlogHandler`, `zharpzap`, `zharplogrus` and
+  `zharpzerolog` stamp; lines outside a request and lines with their own `trace_id` are left alone.
+  On by default; `Config.LogCorrelation` / `ZHARP_LOG_CORRELATION=false` turns it off.
+- `zharp.Bool`, `zharp.LogIDs` and `zharp.StampLine` (for logging integrations).
 - Every log line, whatever it is written with:
   - `zharpzap` (`Wrap`, `Core`, `Context`), `zharplogrus` (`Install`, `Hook`) and `zharpzerolog`
     (`Writer`, `TraceHook`) modules send zap, logrus and zerolog logs with their level, fields and
@@ -9,7 +19,7 @@
   - `zharp.WrapSlogHandler` sends a slog handler's records too (for a `slog.SetDefault` after
     `Init`); `zharp.LoggerProvider` is a provider for any OpenTelemetry log bridge that follows the
     active `Init`.
-  - `Config.CaptureOutput` / `ZHARP_CAPTURE_OUTPUT=true`: every line printed to `os.Stdout` and
+  - `Config.CaptureOutput` / `ZHARP_CAPTURE_OUTPUT=true` (with logs on): every line printed to `os.Stdout` and
     `os.Stderr` is sent too, level read from the line, never a line an exact capture already sent.
     Off by default (it swaps `os.Stdout`/`os.Stderr` for pipes; see the README for why).
 - slog's default now sends a record to Zharp before printing it.

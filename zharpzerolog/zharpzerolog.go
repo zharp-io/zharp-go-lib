@@ -7,10 +7,13 @@
 //	logger := zerolog.New(zharpzerolog.Writer(os.Stdout)).Hook(zharpzerolog.TraceHook{}).With().Timestamp().Logger()
 //	logger.Info().Ctx(r.Context()).Int("order_id", 42).Msg("Order placed")
 //
-// Writer passes every event on to the writer it wraps unchanged (os.Stdout, a ConsoleWriter, a
-// file…) and sends it to Zharp first. zerolog's hooks can't see an event's fields and its writers
-// can't see its context, so TraceHook adds the context's trace_id and span_id to the event as
-// fields — printed too — and Writer sends the event in that trace.
+// TraceHook adds the trace_id and span_id of the event's context (event.Ctx(ctx)) as fields, so
+// the printed line carries its request's ids and the Zharp agent links it to the request
+// (zharp.Config.LogCorrelation). Writer passes every event on to the writer it wraps (os.Stdout, a
+// ConsoleWriter, a file…) and, with zharp.Config.Logs on, sends it to Zharp first, in the trace
+// those fields name: zerolog's hooks can't see an event's fields and its writers can't see its
+// context. A ConsoleWriter's line ends with " trace_id=… span_id=…" instead of listing them
+// among its sorted fields.
 package zharpzerolog
 
 import (
@@ -61,6 +64,10 @@ func (w *writer) WriteLevel(level zerolog.Level, p []byte) (int, error) {
 	switch next := w.next.(type) {
 	case nil:
 		return len(p), nil
+	case zerolog.ConsoleWriter:
+		return w.console(next, p)
+	case *zerolog.ConsoleWriter:
+		return w.console(*next, p)
 	case zerolog.LevelWriter:
 		return next.WriteLevel(level, p)
 	default:
@@ -130,6 +137,34 @@ func (w *writer) send(level zerolog.Level, p []byte) {
 	w.logger.Emit(ctx, r)
 }
 
+// console prints a ConsoleWriter's line with the ids at its end, where Zharp reads them.
+func (w *writer) console(cw zerolog.ConsoleWriter, p []byte) (int, error) {
+	var ids struct {
+		TraceID string `json:"trace_id"`
+		SpanID  string `json:"span_id"`
+	}
+	if json.Unmarshal(p, &ids) != nil || ids.TraceID == "" || cw.Out == nil {
+		return cw.Write(p)
+	}
+	traceID, err1 := trace.TraceIDFromHex(ids.TraceID)
+	spanID, err2 := trace.SpanIDFromHex(ids.SpanID)
+	if err1 != nil || err2 != nil {
+		return cw.Write(p)
+	}
+	out := cw.Out
+	var buf bytes.Buffer
+	cw.Out = &buf
+	cw.FieldsExclude = append(append([]string(nil), cw.FieldsExclude...), TraceIDField, SpanIDField)
+	if _, err := cw.Write(p); err != nil {
+		return 0, err
+	}
+	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID}))
+	if _, err := out.Write(zharp.StampLine(ctx, buf.Bytes())); err != nil {
+		return 0, err
+	}
+	return len(p), nil
+}
+
 func severityOf(level zerolog.Level) (otellog.Severity, string) {
 	switch level {
 	case zerolog.TraceLevel:
@@ -173,14 +208,13 @@ func valueOf(v any) attribute.Value {
 	}
 }
 
-// TraceHook adds the trace_id and span_id of the event's context (event.Ctx(ctx)) as fields, so
-// Writer sends the event in its request's trace. They are printed too.
+// TraceHook adds the trace_id and span_id of the event's context (event.Ctx(ctx)) as fields, while
+// a zharp.Init is active with LogCorrelation on. Writer sends the event in that trace.
 type TraceHook struct{}
 
 // Run implements zerolog.Hook.
 func (TraceHook) Run(e *zerolog.Event, _ zerolog.Level, _ string) {
-	sc := trace.SpanContextFromContext(e.GetCtx())
-	if sc.IsValid() {
-		e.Str(TraceIDField, sc.TraceID().String()).Str(SpanIDField, sc.SpanID().String())
+	if traceID, spanID, ok := zharp.LogIDs(e.GetCtx()); ok {
+		e.Str(TraceIDField, traceID).Str(SpanIDField, spanID)
 	}
 }

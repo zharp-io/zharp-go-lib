@@ -1,6 +1,6 @@
-// A net/http server with Zharp. The key and endpoint come from the environment:
+// A net/http server with Zharp. The key comes from the environment:
 //
-//	ZHARP_KEY=zpk_… ZHARP_ENDPOINT=http://localhost:3000/api/v1/otlp go run ./examples/nethttp
+//	ZHARP_KEY=zpk_… go run ./examples/nethttp
 //
 // then: curl localhost:8080/hello/ann · curl localhost:8080/boom
 package main

@@ -59,7 +59,7 @@ func TestHookSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	Install(toBuffer) // before Init: follows whichever Init is active
 
 	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
-	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "logrus-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true})
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "logrus-unit", SpanExporter: spans, LogExporter: logs, CaptureOutput: true, Logs: zharp.Bool(true)})
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 
 	// Text output to the captured stdout: the printed line must not be sent again.
@@ -107,5 +107,41 @@ func TestHookSendsWithLevelFieldsAndTraceOnce(t *testing.T) {
 	}
 	if !strings.Contains(printed.String(), `"msg":"logrus to a buffer"`) {
 		t.Errorf("printed output changed: %s", printed.String())
+	}
+}
+
+func TestLogsOffStillStamps(t *testing.T) {
+	t.Setenv("ZHARP_LOGS", "")
+	spans, logs := tracetest.NewInMemoryExporter(), &memoryLogs{}
+	shutdown := zharp.Init(zharp.Config{Key: "zpk_test", Service: "logrus-unit", SpanExporter: spans, LogExporter: logs})
+	t.Cleanup(func() { _ = shutdown(context.Background()) })
+
+	var text, js bytes.Buffer
+	textLogger := logrus.New()
+	textLogger.SetOutput(&text)
+	textLogger.SetFormatter(&logrus.TextFormatter{DisableColors: true})
+	jsonLogger := logrus.New()
+	jsonLogger.SetOutput(&js)
+	jsonLogger.SetFormatter(&logrus.JSONFormatter{})
+	Install(textLogger, jsonLogger)
+	Install(textLogger) // twice: still one hook, one stamp
+
+	ctx, span := zharp.Tracer().Start(context.Background(), "checkout")
+	textLogger.WithContext(ctx).WithField("order_id", 42).Info("logrus in a request")
+	textLogger.Info("logrus outside a request")
+	jsonLogger.WithContext(ctx).Info("logrus json in a request")
+	span.End()
+	_ = zharp.Flush(context.Background())
+
+	if n := len(logs.byBody()); n != 0 {
+		t.Errorf("%d records sent with logs off", n)
+	}
+	tid, sid := span.SpanContext().TraceID().String(), span.SpanContext().SpanID().String()
+	lines := strings.Split(strings.TrimSpace(text.String()), "\n")
+	if !strings.HasSuffix(lines[0], "order_id=42 trace_id="+tid+" span_id="+sid) || strings.Contains(lines[1], "trace_id") {
+		t.Errorf("text lines:\n%s\n%s", lines[0], lines[1])
+	}
+	if !strings.HasSuffix(strings.TrimSpace(js.String()), `"trace_id":"`+tid+`","span_id":"`+sid+`"}`) {
+		t.Errorf("json line: %s", js.String())
 	}
 }

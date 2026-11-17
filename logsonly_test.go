@@ -17,6 +17,9 @@ func setupLogsOnly(t *testing.T, cfg Config) (*tracetest.InMemoryExporter, *memo
 	logs := &memoryLogs{}
 	cfg.Key, cfg.Service = "zpk_test", "go-unit"
 	cfg.SpanExporter, cfg.LogExporter = spans, logs
+	if cfg.Logs == nil { // these tests are about sending logs; logs_test.go covers the default
+		cfg.Logs = Bool(true)
+	}
 	shutdown := Init(cfg)
 	t.Cleanup(func() { _ = shutdown(context.Background()) })
 	return spans, logs

@@ -226,7 +226,7 @@ func TestShutdownRestoresOutput(t *testing.T) {
 	withOutputFiles(t)
 	before := os.Stdout
 	logs := &memoryLogs{}
-	shutdown := Init(Config{Key: "zpk_test", Service: "go-unit", LogExporter: logs, CaptureOutput: true})
+	shutdown := Init(Config{Key: "zpk_test", Service: "go-unit", LogExporter: logs, CaptureOutput: true, Logs: Bool(true)})
 	kept := os.Stdout
 	fmt.Fprint(os.Stdout, "last words")
 	if err := shutdown(context.Background()); err != nil {
