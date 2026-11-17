@@ -51,7 +51,8 @@ const scopeName = "github.com/zharp-io/zharp-go-lib"
 
 // Config holds the settings for Init. Anything left empty is read from the environment —
 // ZHARP_KEY, ZHARP_SERVICE (then OTEL_SERVICE_NAME), ZHARP_ENVIRONMENT, ZHARP_RELEASE,
-// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING, ZHARP_CAPTURE_BODIES — then defaulted.
+// ZHARP_ENDPOINT, ZHARP_SAMPLE_RATE, ZHARP_TRACING, ZHARP_CAPTURE_BODIES, ZHARP_CAPTURE_OUTPUT —
+// then defaulted.
 type Config struct {
 	// Key is the app's key (zpk_…) from Applications → your app → Setup. Without one, nothing
 	// is sent.
@@ -81,6 +82,17 @@ type Config struct {
 	// KeepSlogDefault leaves slog's default logger alone. By default Init makes slog.Default
 	// (and so the log package) write to the console as before and also send to Zharp.
 	KeepSlogDefault bool
+	// CaptureOutput also sends every line printed to os.Stdout and os.Stderr — fmt.Println, a
+	// log.Logger or zap/zerolog/logrus logger writing to them, anything — that the exact captures
+	// (slog, the log package, zharpzap, zharplogrus, zharpzerolog) didn't already send. Each line
+	// still prints exactly as before. Its level is read from the line (a JSON record's level,
+	// level=error, ERROR, [warn], klog's E1117…); otherwise stdout is info and stderr a warning. A
+	// line an exact capture already sent is not sent again. Off by default:
+	// ZHARP_CAPTURE_OUTPUT=true turns it on without code. Init swaps os.Stdout and os.Stderr for
+	// pipes, so: call Init first thing in main; a line printed right before os.Exit can be lost;
+	// code that checks for a terminal sees a pipe (no colours); and a printed line carries no
+	// request unless it is JSON with its own trace_id. See the README.
+	CaptureOutput bool
 
 	// SpanExporter and LogExporter replace the OTLP/HTTP exporters to Zharp, and export each span
 	// and log synchronously as it ends — for tests (tracetest.NewInMemoryExporter).
@@ -139,6 +151,12 @@ func Init(cfg Config) func(context.Context) error {
 	if previous != nil {
 		_ = previous.shutdown(context.Background())
 	}
+	// Last, so the slog console handler made in start keeps the real stderr.
+	if cfg.CaptureOutput {
+		startOutputCapture()
+	} else {
+		stopOutputCapture()
+	}
 
 	env := "no environment set"
 	if cfg.Environment != "" {
@@ -148,14 +166,24 @@ func Init(cfg Config) func(context.Context) error {
 	if cfg.DisableTracing {
 		mode = ", logs only (tracing off)"
 	}
+	if cfg.CaptureOutput {
+		mode += ", capturing stdout/stderr"
+	}
 	announce(fmt.Sprintf("Application Monitoring active — service %q, %s%s", cfg.Service, env, mode))
 
 	return func(ctx context.Context) error {
+		if active() == s {
+			drainOutput(ctx)
+		}
 		mu.Lock()
-		if current == s {
+		last := current == s
+		if last {
 			current = nil
 		}
 		mu.Unlock()
+		if last {
+			stopOutputCapture()
+		}
 		return s.shutdown(ctx)
 	}
 }
@@ -208,6 +236,7 @@ func start(cfg Config) (*state, error) {
 	}
 	lp := sdklog.NewLoggerProvider(
 		sdklog.WithResource(res),
+		sdklog.WithProcessor(sentLogProcessor{}),
 		sdklog.WithProcessor(contextLogProcessor{}),
 		sdklog.WithProcessor(logProcessor),
 	)
@@ -258,6 +287,7 @@ func Flush(ctx context.Context) error {
 	if s == nil {
 		return nil
 	}
+	drainOutput(ctx)
 	var err error
 	if s.tracerProvider != nil {
 		err = s.tracerProvider.ForceFlush(ctx)
@@ -305,6 +335,9 @@ func resolve(cfg Config) Config {
 			cfg.SampleRate = rate
 		}
 	}
+	if !cfg.CaptureOutput && isTrue(os.Getenv("ZHARP_CAPTURE_OUTPUT")) {
+		cfg.CaptureOutput = true
+	}
 	if !cfg.DisableTracing && isFalse(os.Getenv("ZHARP_TRACING")) {
 		cfg.DisableTracing = true
 	}
@@ -349,7 +382,7 @@ func mainModuleName() string {
 }
 
 func announce(message string) {
-	fmt.Fprintln(os.Stderr, "[Zharp] "+message)
+	fmt.Fprintln(originalStderr(), "[Zharp] "+message)
 }
 
 // onceErrorHandler prints each distinct OpenTelemetry error once (a wrong key would otherwise

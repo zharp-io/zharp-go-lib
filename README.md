@@ -27,7 +27,8 @@ defer shutdown(context.Background())
 
 Copy the key from **Applications → your app → Setup** in Zharp. Leave fields empty to read them
 from `ZHARP_KEY`, `ZHARP_SERVICE` (then `OTEL_SERVICE_NAME`), `ZHARP_ENVIRONMENT`,
-`ZHARP_RELEASE`, `ZHARP_ENDPOINT`, `ZHARP_SAMPLE_RATE`, `ZHARP_TRACING`. `ZHARP_DISABLED=true` turns it off. Init
+`ZHARP_RELEASE`, `ZHARP_ENDPOINT`, `ZHARP_SAMPLE_RATE`, `ZHARP_TRACING`, `ZHARP_CAPTURE_BODIES`,
+`ZHARP_CAPTURE_OUTPUT`. `ZHARP_DISABLED=true` turns it off. Init
 never panics: without a key it prints one line and sends nothing.
 
 ## Trace requests
@@ -95,15 +96,78 @@ or `ZHARP_CAPTURE_BODIES=errors` (or `all`) in the environment. More control:
 
 ## Logs
 
-`slog` is bridged: after `Init`, `slog.InfoContext(ctx, …)` — and the `log` package — prints as
-before and goes to Zharp with the request's trace (use the `…Context` variants). To log to Zharp
-only:
+Every log line your app writes should reach Zharp, tied to the request it was written in. There
+are two layers: exact captures, which know a log's level, fields and request; and an optional net
+under them for anything printed some other way.
+
+**slog and the log package** are bridged: after `Init`, `slog.InfoContext(ctx, …)` — and
+`log.Print…` — print as before and go to Zharp with the request's trace (use the `…Context`
+variants; the `log` package has no context, so its lines carry no trace). If you set your own
+default after `Init`, wrap its handler:
+
+```go
+slog.SetDefault(slog.New(zharp.WrapSlogHandler(slog.NewJSONHandler(os.Stdout, nil))))
+```
+
+`Config.KeepSlogDefault` leaves `slog.Default` alone; `zharp.SlogHandler()` gives you Zharp's
+handler alone. To log to Zharp only:
 
 ```go
 zharp.Log.Info(ctx, "Order placed", "order_id", 42)   // Debug, Info, Warn, Error, Fatal
 ```
 
-`Config.KeepSlogDefault` leaves `slog.Default` alone; `zharp.SlogHandler()` gives you the handler.
+**zap, logrus, zerolog** — small modules, so the core doesn't pull these libraries in. Each keeps
+the logger's output exactly as it was and sends each entry its level lets through, with its fields:
+
+```go
+// go get github.com/zharp-io/zharp-go-lib/zharpzap
+logger := zharpzap.Wrap(zap.Must(zap.NewProduction()))
+logger.Info("Order placed", zap.Int("order_id", 42), zharpzap.Context(ctx))   // Context: the request's trace; not printed
+
+// go get github.com/zharp-io/zharp-go-lib/zharplogrus
+zharplogrus.Install()                                   // the standard logger; or Install(myLogger)
+logrus.WithContext(ctx).WithField("order_id", 42).Info("Order placed")
+
+// go get github.com/zharp-io/zharp-go-lib/zharpzerolog
+logger := zerolog.New(zharpzerolog.Writer(os.Stdout)).Hook(zharpzerolog.TraceHook{})
+logger.Info().Ctx(ctx).Int("order_id", 42).Msg("Order placed")
+```
+
+zerolog's hooks can't see an event's fields and its writers can't see its context, so
+`TraceHook` adds `trace_id` and `span_id` fields (printed too) and `Writer` sends the event in that
+trace. `zharplogrus.Install` also has `logrus.Fatal` send what is queued before it exits. These
+work when made before `Init`. For any other OpenTelemetry log bridge, `zharp.LoggerProvider()` is
+a provider that follows the active `Init`.
+
+**Everything printed: `CaptureOutput`** (off by default)
+
+```go
+zharp.Init(zharp.Config{Key: "zpk_…", Service: "checkout-api", CaptureOutput: true})
+```
+
+or `ZHARP_CAPTURE_OUTPUT=true`. Every line written to `os.Stdout` and `os.Stderr` — `fmt.Println`,
+a `log.Logger`, a logger with no Zharp module, a library — is sent too, and still prints exactly as
+before. Its level is read from the line: a JSON record's `level`/`severity` (and its message as the
+body), `level=error`, `ERROR`, `[warn]`, zerolog's `ERR`, klog's `E1117 …`; otherwise stdout is
+info and stderr a warning. Colour codes are stripped, an unfinished line is sent after 200 ms, a
+line is cut at 32 KB, and a line an exact capture above already sent is not sent again. The SDK's
+own `[Zharp]` lines are never sent.
+
+It is off by default because Go can't watch a file being written: `Init` swaps `os.Stdout` and
+`os.Stderr` for pipes, and a goroutine copies each one to the real output before sending its lines.
+That has costs you should accept knowingly:
+
+- A line printed right before `os.Exit` (or `log.Fatal`) can still be in the pipe when the process
+  ends, and is then lost **from the output too**. Panics are not affected: the runtime writes them
+  straight to the real stderr.
+- Code that checks whether stdout is a terminal sees a pipe, so it stops printing colours.
+- Only code that reads `os.Stdout`/`os.Stderr` after `Init` is seen: call `Init` first thing in
+  `main`, before you build loggers.
+- A printed line has lost its goroutine, so it carries no request — unless it is a JSON record with
+  its own `trace_id`/`span_id`. Prefer the exact captures above for request logs.
+
+`zharp.Flush` and the shutdown function wait for what was printed to come through. After shutdown
+`os.Stdout`/`os.Stderr` are restored; anything still holding the pipe keeps printing.
 
 ## Logs only
 
@@ -146,12 +210,13 @@ Telemetry is batched (5 s), gzip-compressed and retried by the OpenTelemetry exp
 ## Development
 
 ```bash
-go test ./... && (cd zharpgin && go test ./...) && (cd zharpecho && go test ./...)
+go test ./... && for m in zharpgin zharpecho zharpzap zharplogrus zharpzerolog; do (cd $m && go test ./...); done
 ZHARP_KEY=zpk_… ZHARP_ENDPOINT=http://localhost:3000/api/v1/otlp go run ./examples/nethttp
 ```
 
-`zharpgin` and `zharpecho` are separate modules with a `replace` to the core in this repo; release
-them with their own tags (`zharpgin/v0.2.0`, `zharpecho/v0.2.0`) after tagging the core (`v0.2.0`).
+`zharpgin`, `zharpecho`, `zharpzap`, `zharplogrus` and `zharpzerolog` are separate modules with a
+`replace` to the core in this repo; release them with their own tags (`zharpgin/v0.2.0`, …) after
+tagging the core (`v0.2.0`).
 
 ## License
 

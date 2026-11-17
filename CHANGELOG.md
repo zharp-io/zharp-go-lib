@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Every log line, whatever it is written with:
+  - `zharpzap` (`Wrap`, `Core`, `Context`), `zharplogrus` (`Install`, `Hook`) and `zharpzerolog`
+    (`Writer`, `TraceHook`) modules send zap, logrus and zerolog logs with their level, fields and
+    the request's trace; the logger prints exactly as before.
+  - `zharp.WrapSlogHandler` sends a slog handler's records too (for a `slog.SetDefault` after
+    `Init`); `zharp.LoggerProvider` is a provider for any OpenTelemetry log bridge that follows the
+    active `Init`.
+  - `Config.CaptureOutput` / `ZHARP_CAPTURE_OUTPUT=true`: every line printed to `os.Stdout` and
+    `os.Stderr` is sent too, level read from the line, never a line an exact capture already sent.
+    Off by default (it swaps `os.Stdout`/`os.Stderr` for pipes; see the README for why).
+- slog's default now sends a record to Zharp before printing it.
+- The new modules need the core module from this release (their `go.mod` says v0.3.0 until it is
+  tagged; the `replace` covers development).
+
 ## v0.3.0 (`github.com/zharp-io/zharp-go-lib`, `…/zharpgin`, `…/zharpecho`)
 
 - `Config.CaptureBodies` / `ZHARP_CAPTURE_BODIES=errors|all`: request and response bodies on HTTP
