@@ -29,6 +29,10 @@ func CaptureError(ctx context.Context, err error, args ...any) {
 	if err == nil {
 		return
 	}
+	if f := claimQuery(ctx, err); f != nil { // a failed query's error: sent with the query
+		sendQueryFailure(f, err.Error(), true)
+		return
+	}
 	report(ctx, typeName(err), err.Error(), stackTrace(2, false), true, otellog.SeverityError, args)
 }
 
@@ -71,6 +75,14 @@ func RecoverRequest(w http.ResponseWriter, r *http.Request) {
 // code use CaptureError. A returned error carries no stack, so it is grouped by type and message.
 func ReportUnhandledError(ctx context.Context, err error) {
 	if err == nil {
+		return
+	}
+	// A failed query's error (zharpsql): sent with the query and the stack of the call that ran it.
+	if f := claimQuery(ctx, err); f != nil {
+		if span := trace.SpanFromContext(ctx); span.IsRecording() {
+			span.SetStatus(codes.Error, err.Error())
+		}
+		sendQueryFailure(f, err.Error(), false)
 		return
 	}
 	report(ctx, typeName(err), err.Error(), "", false, otellog.SeverityError, nil)
@@ -152,6 +164,41 @@ func typeName(err error) string {
 		}
 		err = next
 	}
+}
+
+// callSite is the calling goroutine's stack in Go's format without Zharp's frames, the runtime's,
+// or any whose function starts with one of skip (database/sql, an ORM) — from the app's first
+// frame on, so the stack starts where the app made the call.
+func callSite(skip int, skipPrefixes []string) string {
+	pcs := make([]uintptr, 64)
+	n := runtime.Callers(skip+1, pcs)
+	frames := runtime.CallersFrames(pcs[:n])
+	var b strings.Builder
+	b.WriteString("goroutine 1 [running]:\n")
+	started := false
+	for {
+		frame, more := frames.Next()
+		fn := frame.Function
+		own := (strings.HasPrefix(fn, scopeName+".") || strings.HasPrefix(fn, scopeName+"/")) && !strings.HasSuffix(frame.File, "_test.go")
+		library := false
+		for _, p := range skipPrefixes {
+			if strings.HasPrefix(fn, p) {
+				library = true
+				break
+			}
+		}
+		switch {
+		case own, strings.HasPrefix(fn, "runtime."), strings.HasPrefix(fn, "database/sql."):
+		case library && !started:
+		default:
+			started = true
+			fmt.Fprintf(&b, "%s(...)\n\t%s:%d\n", fn, frame.File, frame.Line)
+		}
+		if !more {
+			break
+		}
+	}
+	return b.String()
 }
 
 // stackTrace is the calling goroutine's stack in Go's own format ("goroutine N [running]:", then

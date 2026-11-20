@@ -32,6 +32,7 @@ func Handler(h http.Handler) http.Handler {
 			r.Body = bodies.Request(r.Body)
 			defer func() { bodies.End(trace.SpanFromContext(r.Context()), bodies.Status()) }()
 		}
+		defer func() { RecordHeaders(trace.SpanFromContext(r.Context()), r.Header, w.Header()) }()
 		defer RecoverRequest(w, r)
 		h.ServeHTTP(w, r)
 	})

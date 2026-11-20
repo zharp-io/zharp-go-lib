@@ -67,6 +67,7 @@ func report(next echo.HandlerFunc) echo.HandlerFunc {
 				panic(value)
 			}
 			bodies.End(span, echootel.ResolveResponseStatus(c.Response(), err))
+			zharp.RecordHeaders(span, c.Request().Header, c.Response().Header())
 		}()
 		err = next(c)
 		if err != nil && echootel.ResolveResponseStatus(c.Response(), err) >= 500 {

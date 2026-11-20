@@ -634,6 +634,17 @@ func (c *clientBodies) finish() {
 type captureTransport struct{ base http.RoundTripper }
 
 func (t captureTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := t.roundTrip(r)
+	// Under otelhttp: the request's context holds its CLIENT span.
+	var responseHeaders http.Header
+	if resp != nil {
+		responseHeaders = resp.Header
+	}
+	RecordHeaders(trace.SpanFromContext(r.Context()), r.Header, responseHeaders)
+	return resp, err
+}
+
+func (t captureTransport) roundTrip(r *http.Request) (*http.Response, error) {
 	c, _ := r.Context().Value(clientBodiesKey{}).(*clientBodies)
 	if c == nil {
 		return t.base.RoundTrip(r)

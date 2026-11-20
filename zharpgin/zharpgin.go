@@ -123,6 +123,7 @@ func (s *requestSpan) End(options ...trace.SpanEndOption) {
 	}
 	if c := s.gin; c != nil {
 		s.bodies.End(s.Span, c.Writer.Status())
+		zharp.RecordHeaders(s.Span, c.Request.Header, c.Writer.Header())
 	}
 	s.Span.End(options...)
 }
