@@ -42,7 +42,7 @@ import (
 )
 
 // Version is this module's version, sent as telemetry.sdk.version.
-const Version = "0.4.0"
+const Version = "0.5.0"
 
 // DefaultEndpoint is where telemetry goes.
 const DefaultEndpoint = "https://api.zharp.io/api/v1/otlp"
@@ -79,6 +79,10 @@ type Config struct {
 	// zharpecho). Nil, the default, is off; ZHARP_CAPTURE_BODIES=errors|all turns it on without
 	// code. See CaptureBodies.
 	CaptureBodies *CaptureBodies
+	// DisableHeaders stops recording request and response headers on HTTP spans (Handler,
+	// Transport, zharpgin, zharpecho). They are on by default, secret headers (Authorization,
+	// cookies, API keys, tokens) recorded as "[Filtered]". ZHARP_CAPTURE_HEADERS=false does the same.
+	DisableHeaders bool
 	// Logs sends what the app logs — slog, the log package, and zap/logrus/zerolog through the
 	// zharpzap/zharplogrus/zharpzerolog modules — to Zharp. Nil, the default, is off, unless
 	// ZHARP_LOGS=true: where the Zharp agent reads the app's output (a server, a pod) it already
@@ -123,6 +127,7 @@ type state struct {
 	logs           bool                     // send what the app logs
 	correlation    bool                     // stamp lines with the request's ids
 	bodies         *bodySettings            // nil when CaptureBodies is off
+	headers        bool                     // request and response headers on HTTP spans
 	tracerProvider *sdktrace.TracerProvider // nil with DisableTracing
 	loggerProvider *sdklog.LoggerProvider
 	logger         otellog.Logger
@@ -239,6 +244,8 @@ func start(cfg Config) (*state, error) {
 			sdktrace.WithResource(res),
 			sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRate))),
 			sdktrace.WithSpanProcessor(contextSpanProcessor{}),
+			// Before the exporter: a request's failed queries are reported as its span ends.
+			sdktrace.WithSpanProcessor(queryFlushProcessor{}),
 			sdktrace.WithSpanProcessor(spanProcessor),
 		)
 	}
@@ -278,6 +285,7 @@ func start(cfg Config) (*state, error) {
 	s := &state{
 		tracing:        tp != nil,
 		bodies:         bodySettingsFrom(cfg.CaptureBodies),
+		headers:        !cfg.DisableHeaders && !isFalse(os.Getenv("ZHARP_CAPTURE_HEADERS")),
 		tracerProvider: tp,
 		loggerProvider: lp,
 		logger:         lp.Logger(scopeName, otellog.WithInstrumentationVersion(Version)),

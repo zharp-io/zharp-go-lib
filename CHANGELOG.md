@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.0 (`github.com/zharp-io/zharp-go-lib` and its integrations; new: `…/zharpsql` v0.1.0) — 2026-11-21
+
+- Request and response headers on HTTP spans (`DisableHeaders`, `ZHARP_CAPTURE_HEADERS=false` to turn off); secrets are sent as `[Filtered]`.
+- New `zharpsql`: wraps `database/sql` and any driver (GORM, sqlx, bun on top), traces each query and reports a failed one once, with the call site.
+
 ## v0.4.0 (`github.com/zharp-io/zharp-go-lib`, `…/zharpgin`, `…/zharpecho`; new: `…/zharpzap`, `…/zharplogrus`, `…/zharpzerolog` v0.1.0) — 2026-11-17
 
 **Behaviour change:** slog and the `log` package are no longer sent to Zharp unless `Logs` is on (`ZHARP_LOGS=true`). Lines logged in a request end with `trace_id=… span_id=…` and the Zharp agent brings them in; errors, traces and `zharp.Log` are sent as before.
