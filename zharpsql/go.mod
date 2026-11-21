@@ -3,7 +3,7 @@ module github.com/zharp-io/zharp-go-lib/zharpsql
 go 1.26.0
 
 require (
-	github.com/zharp-io/zharp-go-lib v0.4.0
+	github.com/zharp-io/zharp-go-lib v0.5.0
 	go.opentelemetry.io/otel v1.47.0
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/sdk/log v1.47.0

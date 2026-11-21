@@ -19,8 +19,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePC
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0/go.mod h1:zOBXOsUaBSjKgmH4OGzV1esUpR3oUSCPYVd2cUBjKYY=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/zharp-io/zharp-go-lib v0.4.0 h1:gz6M0lA/jI6qY0H1t6SUAZAK4oIXBQmAtzUKIdGuc3Y=
-github.com/zharp-io/zharp-go-lib v0.4.0/go.mod h1:Yn/t+LQZBRqD6bpREpa0EvsRxoSGDkehKZ0PW+0NVMo=
+github.com/zharp-io/zharp-go-lib v0.5.0 h1:aceokRCE+4czIQUOi/07jZKVEmK17P/LTZ4j8ZSNjFk=
+github.com/zharp-io/zharp-go-lib v0.5.0/go.mod h1:Yn/t+LQZBRqD6bpREpa0EvsRxoSGDkehKZ0PW+0NVMo=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/bridges/otelslog v0.21.0 h1:/CdgE52i1OEPHhsGUqrggYNRaZy4v4YgVenGd52dRBI=
