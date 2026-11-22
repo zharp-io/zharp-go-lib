@@ -51,14 +51,60 @@ router.Use(zharpgin.Middleware())
 e.Use(zharpecho.Middleware())
 ```
 
+**Fiber (v2)** — `go get github.com/zharp-io/zharp-go-lib/zharpfiber`
+
+```go
+app.Use(recover.New())          // optional, before zharpfiber
+app.Use(zharpfiber.Middleware())
+```
+
+Handlers get the request's context from `c.UserContext()`. A handler's error is answered by the
+app's `ErrorHandler` inside the span, so the span has the status the client got.
+
+**Iris (v12)** — `go get github.com/zharp-io/zharp-go-lib/zharpiris`
+
+```go
+app := iris.Default()                 // or iris.New() with app.UseRouter(recover.New()) first
+app.UseRouter(zharpiris.Middleware()) // every request, 404s included
+```
+
+The `iris.Context` carries the span: `slog.InfoContext(ctx, …)`. `ctx.StopWithError(5xx, err)` is
+reported.
+
+**fasthttp** — `go get github.com/zharp-io/zharp-go-lib/zharpfasthttp`
+
+```go
+fasthttp.ListenAndServe(":8080", zharpfasthttp.Handler(handler))
+```
+
+fasthttp has no router, so spans are named by method and path (`GET /orders/7`) unless you pass the
+route: `zharpfasthttp.Handler(h, zharpfasthttp.WithRoute(func(ctx *fasthttp.RequestCtx) string { … }))`
+(with `github.com/fasthttp/router`: set `SaveMatchedRoutePath` and return
+`ctx.UserValue(router.MatchedRoutePathParam)`). A `*fasthttp.RequestCtx` doesn't carry the span:
+pass `zharpfasthttp.Context(ctx)` to `slog.InfoContext`, `zharp.CaptureError` and outgoing calls. A
+panic is answered with a 500 (fasthttp has no recovery of its own).
+
+**Negroni** — it is net/http: wrap it with `zharp.Handler(n)`. Routes are named when the router
+inside is Go's `ServeMux`.
+
+**gorilla/mux** (alone or inside Negroni) — `go get github.com/zharp-io/zharp-go-lib/zharpmux`
+
+```go
+router.Use(zharpmux.Middleware())                   // names the span after the mux route
+http.ListenAndServe(":8080", zharp.Handler(router)) // or zharp.Handler(negroniApp)
+```
+
+Without it the spans of a gorilla/mux app are named by method alone (`GET`).
+
 Each request becomes one SERVER span named by its route (`GET /orders/{id}`), continuing the
 caller's trace from `traceparent`. The user and session a Zharp front-end SDK sends in `baggage`
 (`enduser.id`, `session.id`) go on every span and log of the request. A panic is reported as an
-unhandled error (and answered with a 500 by `zharp.Handler`; Gin and Echo keep their own recovery);
-so is an error a Gin/Echo handler returns that ends in a 5xx.
+unhandled error (and answered with a 500 by `zharp.Handler` and `zharpfasthttp`; Gin, Echo, Fiber
+and Iris keep their own recovery); so is an error a Gin/Echo/Fiber/Iris handler returns that ends
+in a 5xx.
 
 Outgoing calls: `&http.Client{Transport: zharp.Transport(nil)}`, with `http.NewRequestWithContext`.
-Gin and Echo live in their own modules, so the core module doesn't pull them in.
+The framework integrations live in their own modules, so the core module doesn't pull them in.
 
 Secret-looking query values (`?token=`, `key`, `sig`, `password`, `session`, …) are recorded as
 `[Filtered]` in every span's URL, whatever made the span.
@@ -66,7 +112,7 @@ Secret-looking query values (`?token=`, `key`, `sig`, `password`, `session`, …
 ### Request and response bodies
 
 Off by default. With `CaptureBodies`, the spans of incoming requests (`zharp.Handler`, `zharpgin`,
-`zharpecho`) and of outgoing calls (`zharp.Transport`) carry what was sent and what came back:
+`zharpecho`, `zharpfiber`, `zharpiris`, `zharpfasthttp`) and of outgoing calls (`zharp.Transport`) carry what was sent and what came back:
 
 ```go
 zharp.Init(zharp.Config{Key: "zpk_…", Service: "checkout-api",
@@ -93,6 +139,7 @@ or `ZHARP_CAPTURE_BODIES=errors` (or `all`) in the environment. More control:
 - Echo: an error a handler returns is written by Echo after the span ends, so that request's body
   is captured but its error response isn't — unless echo-otel's `OnNextError` writes it inside the
   span (`func(c echo.Context, err error) { c.Error(err) }`).
+- fasthttp and Fiber: a streamed body (`SetBodyStream`, `Server.StreamRequestBody`) isn't captured.
 
 ## Logs
 
@@ -208,7 +255,7 @@ shutdown := zharp.Init(zharp.Config{Key: "zpk_…", Service: "checkout-api", Dis
 
 or `ZHARP_TRACING=false`. Logs (`zharp.Log`; `slog` and `log` with `Logs` on), errors (panics, 5xx handler errors,
 `CaptureError`, with the handled flag), `SetUser` and `SetTag` work as usual. No spans are created
-or sent: `zharp.Handler`, `zharpgin` and `zharpecho` make none, `zharp.Tracer()` spans record
+or sent: `zharp.Handler` and the framework modules make none, `zharp.Tracer()` spans record
 nothing (the code inside still runs), and `zharp.Transport` and the global propagator add no
 `traceparent` or `baggage` to outgoing requests. Incoming `traceparent` and `baggage` are still
 read, so a request's logs and errors carry the caller's trace id, user and session.
@@ -239,11 +286,11 @@ Telemetry is batched (5 s), gzip-compressed and retried by the OpenTelemetry exp
 ## Development
 
 ```bash
-go test ./... && for m in zharpgin zharpecho zharpzap zharplogrus zharpzerolog; do (cd $m && go test ./...); done
+go test ./... && for m in zharpgin zharpecho zharpfiber zharpiris zharpfasthttp zharpmux zharpsql zharpzap zharplogrus zharpzerolog; do (cd $m && go test ./...); done
 ZHARP_KEY=zpk_… go run ./examples/nethttp
 ```
 
-`zharpgin`, `zharpecho`, `zharpzap`, `zharplogrus` and `zharpzerolog` are separate modules with a
+The `zharp…` directories are separate modules with a
 `replace` to the core in this repo; release them with their own tags (`zharpgin/v0.2.0`, …) after
 tagging the core (`v0.2.0`).
 
