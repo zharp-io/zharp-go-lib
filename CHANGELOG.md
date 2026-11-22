@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased (new: `…/zharpfiber`, `…/zharpiris`, `…/zharpfasthttp`, `…/zharpmux` v0.1.0)
+
+Each needs the core module v0.5.0; the core is unchanged.
+
+- `zharpfiber` (Fiber v2): `app.Use(zharpfiber.Middleware())`. One SERVER span per request named by
+  its route (`GET /orders/:id`; the method alone when nothing matched), headers, bodies, panics
+  reported and passed on to `recover.New()`, handler errors ending in a 5xx reported. The error is
+  answered by the app's `ErrorHandler` inside the span.
+- `zharpiris` (Iris v12): `app.UseRouter(zharpiris.Middleware())`. The same, route from the
+  registered template (`GET /orders/{id}`); `ctx.StopWithError` with a 5xx is reported.
+- `zharpfasthttp` (fasthttp v1.51+): `zharpfasthttp.Handler(h)`. Spans named by method and path
+  unless `WithRoute` gives the route; `zharpfasthttp.Context(ctx)` is the request's context; a
+  panic is reported and answered with a 500.
+- `zharpmux` (gorilla/mux): `router.Use(zharpmux.Middleware())` names `zharp.Handler`'s spans after
+  the mux route, alone or inside Negroni. Negroni with Go's `ServeMux` needs only `zharp.Handler(n)`.
+
 ## v0.5.0 (`github.com/zharp-io/zharp-go-lib` and its integrations; new: `…/zharpsql` v0.1.0) — 2026-11-21
 
 - Request and response headers on HTTP spans (`DisableHeaders`, `ZHARP_CAPTURE_HEADERS=false` to turn off); secrets are sent as `[Filtered]`.
